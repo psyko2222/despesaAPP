@@ -138,7 +138,7 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, (req, r
       debit_date,
       paid = false,
       recurring = false,
-      fixedAmount = true,
+      fixedAmount,
       fixed_amount,
       originalDay,
       original_day,
@@ -149,7 +149,11 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, (req, r
     // Handle both naming conventions (camelCase and snake_case)
     const finalAmountCents = amountCents !== undefined ? amountCents : amount_cents;
     const finalDebitDate = debitDate !== undefined ? debitDate : debit_date;
-    const finalFixedAmount = fixedAmount !== undefined ? fixedAmount : fixed_amount;
+
+    // Avalia corretamente se 'fixedAmount' ou 'fixed_amount' é explicitamente verdadeiro (booleano, 1 ou string "true")
+    const rawFixedAmount = fixedAmount !== undefined ? fixedAmount : fixed_amount;
+    const finalFixedAmount = (rawFixedAmount === true || rawFixedAmount === 1 || rawFixedAmount === 'true');
+
     const finalOriginalDay = originalDay !== undefined ? originalDay : original_day;
     const finalRecurrenceMonths = recurrenceMonths !== undefined ? recurrenceMonths : recurrence_months;
 
@@ -188,7 +192,7 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, (req, r
       horizon.setMonth(horizon.getMonth() + 18); // 18 months ahead from today
 
       let nextDate = new Date(finalDebitDate);
-      
+
       // Skip past occurrences, start from current or future
       while (nextDate < today) {
         nextDate.setMonth(nextDate.getMonth() + normalizedMonths);
@@ -466,7 +470,7 @@ router.post('/ensure-future', authenticateToken, (req, res) => {
 
     recurringExpenses.forEach(root => {
       const seriesId = root.series_id || root.id;
-      
+
       const latest = db.prepare(`
         SELECT * FROM expenses 
         WHERE series_id = ? AND user_id = ?
@@ -479,7 +483,7 @@ router.post('/ensure-future', authenticateToken, (req, res) => {
 
       const interval = normalizedRecurrenceMonths(latest.recurrence_months);
       let nextDate = new Date(latestDate);
-      
+
       // Skip past occurrences, start from current or future
       while (nextDate < today) {
         nextDate.setMonth(nextDate.getMonth() + interval);
