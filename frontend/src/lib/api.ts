@@ -26,7 +26,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -40,6 +42,15 @@ export const authAPI = {
     api.post<AuthResponse>('/auth/login', { email, password }),
   
   me: () => api.get<User>('/auth/me'),
+
+  forgotPassword: (email: string) =>
+    api.post<{ message: string; emailSent?: boolean }>('/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    api.post<{ message: string }>(`/auth/reset-password/${token}`, { newPassword }),
+
+  approveByToken: (token: string) =>
+    api.post<{ message: string }>(`/auth/approve/${token}`),
 };
 
 export const expensesAPI = {

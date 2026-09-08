@@ -1,118 +1,134 @@
 const sgMail = require('@sendgrid/mail');
+const nodemailer = require('nodemailer');
 
-// Initialize SendGrid
-if (process.env.SENDGRID_API_KEY) {
+if (process.env.SENDGRID_API_KEY && !isPlaceholder(process.env.SENDGRID_API_KEY)) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
-/**
- * Send password reset email
- */
-async function sendPasswordResetEmail(email, resetToken, frontendUrl) {
-  if (!process.env.SENDGRID_API_KEY) {
-    console.log('SendGrid not configured. Reset token:', resetToken);
+function isPlaceholder(value) {
+  if (!value) return true;
+  const v = value.trim().toLowerCase();
+  return v.startsWith('your-') || v.includes('change-this') || v === 'undefined';
+}
+
+function fromAddress() {
+  return (
+    process.env.SENDGRID_FROM_EMAIL ||
+    process.env.SMTP_FROM ||
+    process.env.EMAIL_FROM ||
+    'noreply@despesas.app'
+  );
+}
+
+function isEmailConfigured() {
+  const sendgrid = process.env.SENDGRID_API_KEY && !isPlaceholder(process.env.SENDGRID_API_KEY);
+  const smtp = process.env.SMTP_HOST && !isPlaceholder(process.env.SMTP_HOST);
+  return Boolean(sendgrid || smtp);
+}
+
+async function sendMail({ to, subject, text, html }) {
+  if (!isEmailConfigured()) {
+    console.error('Email not sent: configure SENDGRID_API_KEY or SMTP_HOST');
     return { success: false, message: 'Email service not configured' };
   }
 
-  const resetUrl = `${frontendUrl}/login?reset=${resetToken}`;
-
-  const msg = {
-    to: email,
-    from: process.env.SENDGRID_FROM_EMAIL || 'noreply@despesas.app',
-    subject: 'Recuperação de Password - Despesas',
-    text: `
-      Recebemos um pedido para redefinir a sua password.
-      
-      Clique no link abaixo para redefinir a sua password:
-      ${resetUrl}
-      
-      Este link expira em 1 hora.
-      
-      Se não fez este pedido, ignore este email.
-    `,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Recuperação de Password</h2>
-        <p>Recebemos um pedido para redefinir a sua password.</p>
-        <p>Clique no botão abaixo para redefinir a sua password:</p>
-        <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 16px 0;">
-          Redefinir Password
-        </a>
-        <p>Ou copie e cole este link no seu browser:</p>
-        <p style="word-break: break-all; color: #666;">${resetUrl}</p>
-        <p style="color: #666; font-size: 14px;">Este link expira em 1 hora.</p>
-        <p style="color: #666; font-size: 14px;">Se não fez este pedido, ignore este email.</p>
-      </div>
-    `
-  };
+  const from = fromAddress();
 
   try {
-    await sgMail.send(msg);
-    return { success: true, message: 'Email sent successfully' };
+    if (process.env.SENDGRID_API_KEY && !isPlaceholder(process.env.SENDGRID_API_KEY)) {
+      await sgMail.send({ to, from, subject, text, html });
+      return { success: true };
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
+      auth:
+        process.env.SMTP_USER && process.env.SMTP_PASS
+          ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+          : undefined,
+    });
+
+    await transporter.sendMail({ from, to, subject, text, html });
+    return { success: true };
   } catch (error) {
-    console.error('SendGrid error:', error);
+    console.error('Email send error:', error.response?.body || error.message || error);
     return { success: false, message: 'Failed to send email', error: error.message };
   }
 }
 
-/**
- * Send user approval notification to admins
- */
-async function sendUserApprovalNotification(adminEmails, newUserEmail, approvalToken, frontendUrl) {
-  if (!process.env.SENDGRID_API_KEY) {
-    console.log('SendGrid not configured. Approval token:', approvalToken);
-    console.log('Admin emails to notify:', adminEmails);
-    return { success: false, message: 'Email service not configured' };
-  }
+async function sendPasswordResetEmail(email, resetToken, frontendUrl) {
+  const resetUrl = `${frontendUrl.replace(/\/+$/, '')}/login?reset=${resetToken}`;
 
-  const approvalUrl = `${frontendUrl}/admin?approve=${approvalToken}`;
+  return sendMail({
+    to: email,
+    subject: 'Recuperação de Password - Despesas',
+    text: `
+Recebemos um pedido para redefinir a sua password.
+
+Abra este link para definir uma nova password:
+${resetUrl}
+
+Este link expira em 1 hora. Se não fez este pedido, ignore este email.
+    `.trim(),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Recuperação de Password</h2>
+        <p>Recebemos um pedido para redefinir a sua password.</p>
+        <p>
+          <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 4px; margin: 16px 0;">
+            Redefinir Password
+          </a>
+        </p>
+        <p>Ou copie este link:</p>
+        <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+        <p style="color: #666; font-size: 14px;">Este link expira em 1 hora.</p>
+      </div>
+    `,
+  });
+}
+
+async function sendUserApprovalNotification(adminEmails, newUserEmail, approvalToken, frontendUrl) {
+  const approvalUrl = `${frontendUrl.replace(/\/+$/, '')}/login?approve=${approvalToken}`;
+  const recipients = (adminEmails || []).filter(Boolean);
+
+  if (recipients.length === 0) {
+    return { success: false, message: 'No admin emails' };
+  }
 
   const results = [];
-
-  for (const adminEmail of adminEmails) {
-    const msg = {
+  for (const adminEmail of recipients) {
+    const result = await sendMail({
       to: adminEmail,
-      from: process.env.SENDGRID_FROM_EMAIL || 'noreply@despesas.app',
-      subject: 'Novo Utilizador Pendente de Aprovação - Despesas',
+      subject: 'Novo utilizador pendente de aprovação - Despesas',
       text: `
-        Um novo utilizador registou-se e está pendente de aprovação:
-        
-        Email: ${newUserEmail}
-        
-        Para aprovar este utilizador, clique no link abaixo:
-        ${approvalUrl}
-        
-        Para rejeitar, aceda ao painel de administração.
-      `,
+Um novo utilizador registou-se e está pendente de aprovação:
+
+Email: ${newUserEmail}
+
+Para aprovar: ${approvalUrl}
+      `.trim(),
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Novo Utilizador Pendente de Aprovação</h2>
-          <p>Um novo utilizador registou-se e está pendente de aprovação:</p>
-          <p style="font-weight: bold; color: #333;">Email: ${newUserEmail}</p>
-          <p>Para aprovar este utilizador, clique no botão abaixo:</p>
-          <a href="${approvalUrl}" style="display: inline-block; padding: 12px 24px; background-color: #28a745; color: white; text-decoration: none; border-radius: 4px; margin: 16px 0;">
-            Aprovar Utilizador
-          </a>
-          <p>Ou copie e cole este link no seu browser:</p>
-          <p style="word-break: break-all; color: #666;">${approvalUrl}</p>
-          <p style="color: #666; font-size: 14px;">Para rejeitar, aceda ao painel de administração.</p>
+          <h2 style="color: #333;">Novo utilizador pendente</h2>
+          <p>Email: <strong>${newUserEmail}</strong></p>
+          <p>
+            <a href="${approvalUrl}" style="display: inline-block; padding: 12px 24px; background-color: #16a34a; color: white; text-decoration: none; border-radius: 4px; margin: 16px 0;">
+              Aprovar utilizador
+            </a>
+          </p>
         </div>
-      `
-    };
-
-    try {
-      await sgMail.send(msg);
-      results.push({ email: adminEmail, success: true });
-    } catch (error) {
-      console.error(`Failed to send approval email to ${adminEmail}:`, error);
-      results.push({ email: adminEmail, success: false, error: error.message });
-    }
+      `,
+    });
+    results.push({ email: adminEmail, success: result.success });
   }
 
-  return { success: true, results };
+  return { success: results.some((r) => r.success), results };
 }
 
 module.exports = {
+  isEmailConfigured,
   sendPasswordResetEmail,
-  sendUserApprovalNotification
+  sendUserApprovalNotification,
 };

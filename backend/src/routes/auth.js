@@ -6,116 +6,107 @@ const { db } = require('../models/database');
 const { authenticateToken, generateToken } = require('../middleware/auth');
 const { sendPasswordResetEmail, sendUserApprovalNotification } = require('../services/emailService');
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
 // Register
 router.post('/register', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const { password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      return res.status(400).json({ error: 'Email e password são obrigatórios' });
     }
 
     if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      return res.status(400).json({ error: 'A password deve ter pelo menos 6 caracteres' });
     }
 
-    // Check if user exists
     const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
     if (existingUser) {
-      return res.status(409).json({ error: 'User already exists' });
+      return res.status(409).json({ error: 'Já existe uma conta com este email' });
     }
 
-    // Check if this is the first user (make them admin and auto-approve)
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
     const isFirstUser = userCount.count === 0;
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insert user with pending status (unless first user)
     const status = isFirstUser ? 'approved' : 'pending';
     const role = isFirstUser ? 'admin' : 'user';
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const result = db.prepare(
-      'INSERT INTO users (email, password, status, role) VALUES (?, ?, ?, ?)'
-    ).run(email, hashedPassword, status, role);
+    const created = db.transaction(() => {
+      const result = db.prepare(
+        'INSERT INTO users (email, password, status, role) VALUES (?, ?, ?, ?)'
+      ).run(email, hashedPassword, status, role);
 
-    // Create default settings
-    db.prepare(
-      'INSERT INTO settings (user_id) VALUES (?)'
-    ).run(result.lastInsertRowid);
+      const userId = result.lastInsertRowid;
+      db.prepare('INSERT INTO settings (user_id) VALUES (?)').run(userId);
 
-    // If not first user, create approval token
+      let approvalToken = null;
+      if (!isFirstUser) {
+        approvalToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        db.prepare(
+          'INSERT INTO user_approval_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
+        ).run(userId, approvalToken, expiresAt);
+      }
+
+      return { userId, approvalToken };
+    })();
+
     if (!isFirstUser) {
-      const approvalToken = crypto.randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
-
-      db.prepare(
-        'INSERT INTO user_approval_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
-      ).run(result.lastInsertRowid, approvalToken, expiresAt);
-
-      // Get admin emails to notify
       const admins = db.prepare('SELECT email FROM users WHERE role = ? AND status = ?').all('admin', 'approved');
-      const adminEmails = admins.map(a => a.email);
-
-      // Send notification emails to admins
+      const adminEmails = admins.map((a) => a.email);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      if (adminEmails.length > 0) {
+
+      if (adminEmails.length > 0 && created.approvalToken) {
         try {
-          await sendUserApprovalNotification(adminEmails, email, approvalToken, frontendUrl);
-          console.log(`Approval notification sent to ${adminEmails.length} admins`);
+          await sendUserApprovalNotification(adminEmails, email, created.approvalToken, frontendUrl);
         } catch (emailError) {
           console.error('Failed to send approval notification:', emailError);
-          // Continue with registration even if email fails
         }
       }
 
       return res.status(201).json({
-        message: 'Registration successful. Your account is pending approval.',
+        message: 'Conta criada. Fica pendente de aprovação.',
         requiresApproval: true,
-        approvalToken,
-        admins: adminEmails
       });
     }
 
-    const token = generateToken({ id: result.lastInsertRowid, email });
-
     res.status(201).json({
-      message: 'User registered successfully',
-      token,
-      user: { id: result.lastInsertRowid, email, role },
-      requiresApproval: false
+      message: 'Conta criada com sucesso.',
+      requiresApproval: false,
     });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    res.status(500).json({ error: 'Não foi possível criar a conta' });
   }
 });
 
 // Login
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const { password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      return res.status(400).json({ error: 'Email e password são obrigatórios' });
     }
 
-    // Find user
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Email ou password incorrectos' });
     }
 
-    // Check if user is approved
     if (user.status !== 'approved') {
-      return res.status(403).json({ error: 'Account is pending approval or has been rejected' });
+      return res.status(403).json({ error: 'A conta está pendente de aprovação' });
     }
 
     // Verify password
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Email ou password incorrectos' });
     }
 
     // Update last login
@@ -131,7 +122,7 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    res.status(500).json({ error: 'Não foi possível iniciar sessão' });
   }
 });
 
@@ -163,7 +154,7 @@ router.post('/approve/:token', (req, res) => {
     ).get(token, new Date().toISOString());
 
     if (!approvalToken) {
-      return res.status(400).json({ error: 'Invalid or expired approval token' });
+      return res.status(400).json({ error: 'Link de aprovação inválido ou expirado' });
     }
 
     // Approve user
@@ -188,43 +179,40 @@ router.post('/approve/:token', (req, res) => {
 // Request password reset
 router.post('/forgot-password', async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = normalizeEmail(req.body.email);
 
     if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
+      return res.status(400).json({ error: 'O email é obrigatório' });
     }
 
-    // Find user
+    const genericMessage = 'Se existir uma conta com este email, enviámos um link de recuperação.';
     const user = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email);
     if (!user) {
-      // Don't reveal if user exists for security
-      return res.json({ message: 'If the email exists, a reset link will be sent' });
+      return res.json({ message: genericMessage, emailSent: true });
     }
 
-    // Generate reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString(); // 1 hour
+    const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString();
 
-    // Delete any existing tokens for this user
     db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').run(user.id);
-
-    // Insert new token
     db.prepare(
       'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
     ).run(user.id, resetToken, expiresAt);
 
-    // Send email with reset link
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const emailResult = await sendPasswordResetEmail(user.email, resetToken, frontendUrl);
 
-    res.json({
-      message: 'Password reset link generated',
-      emailSent: emailResult.success,
-      email: user.email
-    });
+    if (!emailResult.success) {
+      console.error('Password reset email was not sent:', emailResult.message);
+      return res.status(503).json({
+        error: 'Não foi possível enviar o email de recuperação. Tente mais tarde ou contacte o administrador.',
+      });
+    }
+
+    res.json({ message: genericMessage, emailSent: true });
   } catch (error) {
     console.error('Forgot password error:', error);
-    res.status(500).json({ error: 'Failed to generate reset link' });
+    res.status(500).json({ error: 'Não foi possível gerar o link de recuperação' });
   }
 });
 
@@ -235,7 +223,7 @@ router.post('/reset-password/:token', async (req, res) => {
     const { newPassword } = req.body;
 
     if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      return res.status(400).json({ error: 'A password deve ter pelo menos 6 caracteres' });
     }
 
     // Find valid reset token
@@ -244,7 +232,7 @@ router.post('/reset-password/:token', async (req, res) => {
     ).get(token, new Date().toISOString());
 
     if (!resetToken) {
-      return res.status(400).json({ error: 'Invalid or expired reset token' });
+      return res.status(400).json({ error: 'Link de recuperação inválido ou expirado' });
     }
 
     // Hash new password
@@ -256,10 +244,10 @@ router.post('/reset-password/:token', async (req, res) => {
     // Mark token as used
     db.prepare('UPDATE password_reset_tokens SET used = 1 WHERE id = ?').run(resetToken.id);
 
-    res.json({ message: 'Password reset successfully' });
+    res.json({ message: 'Password redefinida com sucesso' });
   } catch (error) {
     console.error('Reset password error:', error);
-    res.status(500).json({ error: 'Failed to reset password' });
+    res.status(500).json({ error: 'Não foi possível redefinir a password' });
   }
 });
 

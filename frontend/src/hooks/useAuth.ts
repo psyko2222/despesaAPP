@@ -48,17 +48,9 @@ export function useAuth() {
     try {
       setError(null);
       const response = await authAPI.register(email, password);
-
-      // Only set token and user if registration doesn't require approval
-      if (!response.data.requiresApproval) {
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        setUser(response.data.user);
-      }
-
       return response.data;
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed');
+      setError(err.response?.data?.error || 'Não foi possível criar a conta');
       throw err;
     }
   };

@@ -46,8 +46,10 @@ export interface Settings {
 
 export interface AuthResponse {
   message: string;
-  token: string;
-  user: User;
+  token?: string;
+  user?: User;
+  requiresApproval?: boolean;
+  emailSent?: boolean;
 }
 
 export interface TrendDirection {

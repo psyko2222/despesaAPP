@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
+import { authAPI } from '@/lib/api';
 
 type AuthMode = 'login' | 'register' | 'forgot' | 'reset';
 
@@ -18,20 +18,29 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [resetToken, setResetToken] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  // Check for reset token in URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const resetParam = urlParams.get('reset');
+    const approveParam = urlParams.get('approve');
     if (resetParam) {
       setResetToken(resetParam);
       setMode('reset');
     }
+    if (approveParam) {
+      authAPI.approveByToken(approveParam)
+        .then(() => {
+          setSuccess('Utilizador aprovado. Já pode entrar.');
+          setMode('login');
+        })
+        .catch((err: any) => {
+          setError(err.response?.data?.error || 'Não foi possível aprovar o utilizador');
+        });
+    }
   }, []);
-
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,23 +53,19 @@ export default function LoginPage() {
         await login(email, password);
         router.push('/');
       } else if (mode === 'register') {
-        const response = await register(email, password);
-        if (response.data.requiresApproval) {
-          setSuccess('Registo realizado com sucesso! A sua conta está pendente de aprovação.');
-          setMode('login');
+        const result = await register(email, password);
+        if (result.requiresApproval) {
+          setSuccess('Conta criada. Fica pendente de aprovação. Depois disso pode entrar.');
         } else {
-          router.push('/');
+          setSuccess('Conta criada. Pode agora entrar.');
         }
+        setPassword('');
+        setMode('login');
       } else if (mode === 'forgot') {
-        const response = await axios.post('/api/auth/forgot-password', { email });
-        if (response.data.emailSent) {
-          setSuccess('Link de recuperação enviado para o email!');
-        } else {
-          setSuccess('Link de recuperação gerado (serviço de email não configurado)');
-          console.log('Reset token:', response.data.resetToken);
-        }
+        const response = await authAPI.forgotPassword(email);
+        setSuccess(response.data.message || 'Se existir uma conta com este email, enviámos um link de recuperação.');
       } else if (mode === 'reset') {
-        await axios.post(`/api/auth/reset-password/${resetToken}`, { newPassword });
+        await authAPI.resetPassword(resetToken, newPassword);
         setSuccess('Password redefinida com sucesso!');
         setMode('login');
       }
