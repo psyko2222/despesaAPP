@@ -1,15 +1,16 @@
 /** @type {import('next').NextConfig} */
-const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://despesaapp.onrender.com';
-const formattedUrl = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
+
+// Remove barras no final e garante que o protocolo está correto
+let rawUrl = process.env.NEXT_PUBLIC_API_URL || 'https://despesaapp.onrender.com';
+rawUrl = rawUrl.replace(/\/+$/, ''); // Remove / do final se existir
+const formattedUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
 
 const nextConfig = {
   reactStrictMode: true,
   typescript: {
-    // Ignora erros de TypeScript durante o build em produção na Vercel
     ignoreBuildErrors: true,
   },
   eslint: {
-    // Ignora avisos/erros do ESLint durante o build em produção na Vercel
     ignoreDuringBuilds: true,
   },
   env: {
