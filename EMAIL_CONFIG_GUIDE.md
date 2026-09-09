@@ -28,10 +28,10 @@ SMTP_PASS=sua_password_ou_app_password
 SMTP_FROM=seuemail@outlook.com
 ```
 
-### 2.2 No Railway (Backend)
-1. Aceda ao dashboard do Railway
-2. Selecione o projeto backend
-3. Vá a "Variables" tab
+### 2.2 No Render (Backend)
+1. Aceda ao dashboard do Render: https://dashboard.render.com
+2. Selecione o projeto backend (despesas-backend)
+3. Vá a "Environment" tab ou "Environment Variables"
 4. Adicione as seguintes variáveis:
    - `SMTP_HOST`: `smtp-mail.outlook.com`
    - `SMTP_PORT`: `587`
@@ -39,6 +39,8 @@ SMTP_FROM=seuemail@outlook.com
    - `SMTP_USER`: `seuemail@outlook.com`
    - `SMTP_PASS`: `sua_password_ou_app_password`
    - `SMTP_FROM`: `seuemail@outlook.com`
+5. Clique em "Save Changes"
+6. O serviço irá fazer redeploy automaticamente
 
 ## Passo 3: Configurar DNS (Opcional - para email personalizado)
 
@@ -132,6 +134,7 @@ SMTP_FROM=seuemail@gmail.com
 ## Suporte
 
 Se tiver problemas:
-1. Verifique os logs do backend no Railway
+1. Verifique os logs do backend no Render
 2. Verifique o console do browser para erros
 3. Teste as credenciais com um cliente SMTP como outlook.com webmail
+4. No Render dashboard, verifique se o serviço está "Deployed" e não em crash

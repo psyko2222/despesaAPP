@@ -17,7 +17,20 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        value: https://despesas-frontend.onrender.com
+        value: https://despesa-app.vercel.com
+      # Email SMTP Configuration (Hotmail/Outlook)
+      - key: SMTP_HOST
+        value: smtp-mail.outlook.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_SECURE
+        value: false
+      - key: SMTP_USER
+        sync: false # Configure manualmente no dashboard
+      - key: SMTP_PASS
+        sync: false # Configure manualmente no dashboard
+      - key: SMTP_FROM
+        sync: false # Configure manualmente no dashboard
 
   # Frontend Service
   - type: web
@@ -29,7 +42,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: REACT_APP_API_URL
-        value: https://despesas-backend.onrender.com
+        value: https://despesaapp.onrender.com
 
 databases:
   - name: despesas-db
