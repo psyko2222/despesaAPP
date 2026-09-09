@@ -16,6 +16,17 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
+  // Debug logging for POST requests
+  if (config.method === 'post' && config.url?.includes('/expenses')) {
+    console.log('=== DEBUG: API Request ===', {
+      url: config.url,
+      method: config.method,
+      data: config.data,
+      headers: config.headers
+    });
+  }
+  
   return config;
 });
 
