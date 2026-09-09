@@ -61,7 +61,7 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
         recurrence_months: recurring ? recurrenceMonths : 1,
       };
 
-      console.log('Sending expense data:', expenseData);
+      console.log('=== DEBUG: Sending expense data ===', expenseData, new Date().toISOString());
 
       if (initialExpense) {
         await expensesAPI.update(initialExpense.id, expenseData, userId);

@@ -168,10 +168,11 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
     const normalizedMonths = normalizedRecurrenceMonths(finalRecurrenceMonths);
     const day = finalOriginalDay || new Date(finalDebitDate).getDate();
 
-    console.log('Received expense data:', {
+    console.log('=== DEBUG: Received expense data ===', {
       recurrence_months: finalRecurrenceMonths,
       normalizedMonths: normalizedMonths,
-      recurring: recurring
+      recurring: recurring,
+      timestamp: new Date().toISOString()
     });
 
     const insertSql = isPostgres
