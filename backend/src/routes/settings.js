@@ -1,7 +1,26 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, checkDataAccess, requireWriteAccess } = require('../middleware/auth');
+const { authenticateToken, checkDataAccess, requireWriteAccess, requireAdmin } = require('../middleware/auth');
 const { db, isPostgres, queryOne, run } = require('../models/database');
+const { isEmailConfigured } = require('../services/emailService');
+
+// Check email configuration (admin only)
+router.get('/email-config', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const emailConfigured = isEmailConfigured();
+    const config = {
+      configured: emailConfigured,
+      sendgrid: Boolean(process.env.SENDGRID_API_KEY && !process.env.SENDGRID_API_KEY.includes('your-')),
+      smtp: Boolean(process.env.SMTP_HOST && !process.env.SMTP_HOST.includes('your-')),
+      frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000'
+    };
+    
+    res.json(config);
+  } catch (error) {
+    console.error('Email config check error:', error);
+    res.status(500).json({ error: 'Failed to check email configuration' });
+  }
+});
 
 // Get user settings
 router.get('/', authenticateToken, async (req, res) => {

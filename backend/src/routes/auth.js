@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { db, isPostgres, queryOne, run, transaction } = require('../models/database');
 const { authenticateToken, generateToken } = require('../middleware/auth');
-const { sendPasswordResetEmail, sendUserApprovalNotification } = require('../services/emailService');
+const { sendPasswordResetEmail, sendUserApprovalNotification, isEmailConfigured } = require('../services/emailService');
 const { logError } = require('../services/logger');
 
 function normalizeEmail(email) {
@@ -111,18 +111,30 @@ router.post('/register', async (req, res) => {
       console.log('Admins found:', adminEmails);
 
       if (adminEmails.length > 0 && created.approvalToken) {
-        // Send email notification in background - don't block registration
-        sendUserApprovalNotification(adminEmails, email, created.approvalToken, frontendUrl)
-          .catch((emailError) => {
-            console.error('Failed to send approval notification:', emailError);
-            logError({
-              level: 'warning',
-              message: 'Failed to send user approval notification',
-              details: { error: emailError.message, newUserEmail: email, adminEmails },
-              route: '/auth/register',
-              method: 'POST'
+        // Check if email is configured before trying to send
+        if (isEmailConfigured()) {
+          // Send email notification in background - don't block registration
+          sendUserApprovalNotification(adminEmails, email, created.approvalToken, frontendUrl)
+            .catch((emailError) => {
+              console.error('Failed to send approval notification:', emailError);
+              logError({
+                level: 'warning',
+                message: 'Failed to send user approval notification',
+                details: { error: emailError.message, newUserEmail: email, adminEmails },
+                route: '/auth/register',
+                method: 'POST'
+              });
             });
+        } else {
+          console.warn('User approval notification not sent - email service not configured');
+          logError({
+            level: 'warning',
+            message: 'User approval notification not sent - email service not configured',
+            details: { newUserEmail: email, adminEmails },
+            route: '/auth/register',
+            method: 'POST'
           });
+        }
       }
 
       console.log('Returning pending approval response');
@@ -289,6 +301,15 @@ router.post('/forgot-password', async (req, res) => {
 
     if (!email) {
       return res.status(400).json({ error: 'O email é obrigatório' });
+    }
+
+    // Check if email is configured
+    if (!isEmailConfigured()) {
+      console.warn('Password reset requested but email service is not configured');
+      return res.status(503).json({ 
+        error: 'Serviço de email não configurado. Contacte o administrador.',
+        emailNotConfigured: true
+      });
     }
 
     const genericMessage = 'Se existir uma conta com este email, enviámos um link de recuperação.';
