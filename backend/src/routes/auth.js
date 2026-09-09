@@ -306,101 +306,226 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ error: 'O email é obrigatório' });
     }
 
-    // Check if email is configured
-    if (!isEmailConfigured()) {
-      console.warn('Password reset requested but email service is not configured');
-      return res.status(503).json({ 
-        error: 'Serviço de email não configurado. Contacte o administrador.',
-        emailNotConfigured: true
-      });
-    }
-
-    const genericMessage = 'Se existir uma conta com este email, enviámos um link de recuperação.';
     const userQuery = isPostgres
       ? 'SELECT id, email FROM users WHERE email = $1'
       : 'SELECT id, email FROM users WHERE email = ?';
     const user = isPostgres
       ? (await db.query(userQuery, [email])).rows[0]
       : db.prepare(userQuery).get(email);
-    
+
     if (!user) {
-      return res.json({ message: genericMessage, emailSent: true });
+      return res.json({ message: 'Se existir uma conta com este email, o pedido foi enviado para o administrador.' });
     }
 
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString();
+    // Check if there's already a pending request
+    const existingRequestQuery = isPostgres
+      ? 'SELECT id FROM password_reset_requests WHERE user_id = $1 AND status = $2'
+      : 'SELECT id FROM password_reset_requests WHERE user_id = ? AND status = ?';
+    const existingRequest = isPostgres
+      ? (await db.query(existingRequestQuery, [user.id, 'pending'])).rows[0]
+      : db.prepare(existingRequestQuery).get(user.id, 'pending');
 
-    const deleteQuery = isPostgres
-      ? 'DELETE FROM password_reset_tokens WHERE user_id = $1'
-      : 'DELETE FROM password_reset_tokens WHERE user_id = ?';
+    if (existingRequest) {
+      return res.json({ message: 'Já existe um pedido de reset de password pendente. Aguarde a aprovação do administrador.' });
+    }
+
+    // Create password reset request
     const insertQuery = isPostgres
-      ? 'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)'
-      : 'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)';
-    
+      ? 'INSERT INTO password_reset_requests (user_id) VALUES ($1) RETURNING id'
+      : 'INSERT INTO password_reset_requests (user_id) VALUES (?)';
+    let requestId;
     if (isPostgres) {
-      await db.query(deleteQuery, [user.id]);
-      await db.query(insertQuery, [user.id, resetToken, expiresAt]);
+      const result = await db.query(insertQuery, [user.id]);
+      requestId = result.rows[0].id;
     } else {
-      db.prepare(deleteQuery).run(user.id);
-      db.prepare(insertQuery).run(user.id, resetToken, expiresAt);
+      const result = db.prepare(insertQuery).run(user.id);
+      requestId = result.lastInsertRowid;
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    
-    // Send email in background - don't block the response
-    sendPasswordResetEmail(user.email, resetToken, frontendUrl)
-      .then((emailResult) => {
-        if (!emailResult.success) {
-          console.error('Password reset email was not sent:', emailResult.message);
-          logError({
-            level: 'warning',
-            message: 'Password reset email was not sent',
-            details: { result: emailResult },
-            userId: user.id,
-            route: '/auth/forgot-password',
-            method: 'POST'
-          });
-        }
-      })
-      .catch((emailError) => {
-        console.error('Failed to send password reset email:', emailError);
-        logError({
-          level: 'error',
-          message: 'Failed to send password reset email',
-          details: { error: emailError.message },
-          userId: user.id,
-          route: '/auth/forgot-password',
-          method: 'POST'
-        });
-      });
+    console.log(`Password reset request created for user ${user.id}, request ID: ${requestId}`);
 
-    res.json({ message: genericMessage, emailSent: true });
+    res.json({ message: 'Aguarde a redefinição pelo administrador.' });
   } catch (error) {
     console.error('Forgot password error:', error);
-    res.status(500).json({ error: 'Não foi possível gerar o link de recuperação' });
+    res.status(500).json({ error: 'Não foi possível criar o pedido de reset' });
   }
 });
 
-// Reset password with token
-router.post('/reset-password/:token', async (req, res) => {
-  try {
-    const { token } = req.params;
-    const { newPassword } = req.body;
 
-    if (!newPassword || newPassword.length < 6) {
+// Get password reset requests (admin only)
+router.get('/password-reset-requests', authenticateToken, async (req, res) => {
+  try {
+    // Check if user is admin
+    const userQuery = isPostgres
+      ? 'SELECT role FROM users WHERE id = $1'
+      : 'SELECT role FROM users WHERE id = ?';
+    const user = isPostgres
+      ? (await db.query(userQuery, [req.user.id])).rows[0]
+      : db.prepare(userQuery).get(req.user.id);
+
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem ver pedidos de reset.' });
+    }
+
+    // Get pending password reset requests with user info
+    const requestsQuery = isPostgres
+      ? `SELECT prr.id, prr.user_id, prr.status, prr.requested_at, prr.processed_at, prr.processed_by,
+          u.email, u.role as user_role
+          FROM password_reset_requests prr
+          JOIN users u ON prr.user_id = u.id
+          WHERE prr.status = 'pending'
+          ORDER BY prr.requested_at DESC`
+      : `SELECT prr.id, prr.user_id, prr.status, prr.requested_at, prr.processed_at, prr.processed_by,
+          u.email, u.role as user_role
+          FROM password_reset_requests prr
+          JOIN users u ON prr.user_id = u.id
+          WHERE prr.status = 'pending'
+          ORDER BY prr.requested_at DESC`;
+
+    const requests = isPostgres
+      ? (await db.query(requestsQuery)).rows
+      : db.prepare(requestsQuery).all();
+
+    res.json(requests);
+  } catch (error) {
+    console.error('Get password reset requests error:', error);
+    res.status(500).json({ error: 'Não foi possível obter os pedidos de reset' });
+  }
+});
+
+// Approve password reset request (admin only)
+router.post('/password-reset-requests/:id/approve', authenticateToken, async (req, res) => {
+  try {
+    const requestId = req.params.id;
+
+    // Check if user is admin
+    const userQuery = isPostgres
+      ? 'SELECT role FROM users WHERE id = $1'
+      : 'SELECT role FROM users WHERE id = ?';
+    const user = isPostgres
+      ? (await db.query(userQuery, [req.user.id])).rows[0]
+      : db.prepare(userQuery).get(req.user.id);
+
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem aprovar pedidos.' });
+    }
+
+    // Get the reset request
+    const requestQuery = isPostgres
+      ? 'SELECT * FROM password_reset_requests WHERE id = $1 AND status = $2'
+      : 'SELECT * FROM password_reset_requests WHERE id = ? AND status = ?';
+    const resetRequest = isPostgres
+      ? (await db.query(requestQuery, [requestId, 'pending'])).rows[0]
+      : db.prepare(requestQuery).get(requestId, 'pending');
+
+    if (!resetRequest) {
+      return res.status(404).json({ error: 'Pedido não encontrado ou já processado' });
+    }
+
+    // Update request status to approved
+    const updateQuery = isPostgres
+      ? 'UPDATE password_reset_requests SET status = $1, processed_at = $2, processed_by = $3 WHERE id = $4'
+      : 'UPDATE password_reset_requests SET status = ?, processed_at = ?, processed_by = ? WHERE id = ?';
+    if (isPostgres) {
+      await db.query(updateQuery, ['approved', new Date().toISOString(), req.user.id, requestId]);
+    } else {
+      db.prepare(updateQuery).run('approved', new Date().toISOString(), req.user.id, requestId);
+    }
+
+    res.json({ message: 'Pedido de reset aprovado com sucesso' });
+  } catch (error) {
+    console.error('Approve password reset request error:', error);
+    res.status(500).json({ error: 'Não foi possível aprovar o pedido' });
+  }
+});
+
+// Reject password reset request (admin only)
+router.post('/password-reset-requests/:id/reject', authenticateToken, async (req, res) => {
+  try {
+    const requestId = req.params.id;
+
+    // Check if user is admin
+    const userQuery = isPostgres
+      ? 'SELECT role FROM users WHERE id = $1'
+      : 'SELECT role FROM users WHERE id = ?';
+    const user = isPostgres
+      ? (await db.query(userQuery, [req.user.id])).rows[0]
+      : db.prepare(userQuery).get(req.user.id);
+
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem rejeitar pedidos.' });
+    }
+
+    // Get the reset request
+    const requestQuery = isPostgres
+      ? 'SELECT * FROM password_reset_requests WHERE id = $1 AND status = $2'
+      : 'SELECT * FROM password_reset_requests WHERE id = ? AND status = ?';
+    const resetRequest = isPostgres
+      ? (await db.query(requestQuery, [requestId, 'pending'])).rows[0]
+      : db.prepare(requestQuery).get(requestId, 'pending');
+
+    if (!resetRequest) {
+      return res.status(404).json({ error: 'Pedido não encontrado ou já processado' });
+    }
+
+    // Update request status to rejected
+    const updateQuery = isPostgres
+      ? 'UPDATE password_reset_requests SET status = $1, processed_at = $2, processed_by = $3 WHERE id = $4'
+      : 'UPDATE password_reset_requests SET status = ?, processed_at = ?, processed_by = ? WHERE id = ?';
+    if (isPostgres) {
+      await db.query(updateQuery, ['rejected', new Date().toISOString(), req.user.id, requestId]);
+    } else {
+      db.prepare(updateQuery).run('rejected', new Date().toISOString(), req.user.id, requestId);
+    }
+
+    res.json({ message: 'Pedido de reset rejeitado com sucesso' });
+  } catch (error) {
+    console.error('Reject password reset request error:', error);
+    res.status(500).json({ error: 'Não foi possível rejeitar o pedido' });
+  }
+});
+
+// Reset password with email (after admin approval)
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, newPassword, confirmPassword } = req.body;
+
+    if (!email || !newPassword || !confirmPassword) {
+      return res.status(400).json({ error: 'Email, nova password e confirmação são obrigatórios' });
+    }
+
+    if (newPassword.length < 6) {
       return res.status(400).json({ error: 'A password deve ter pelo menos 6 caracteres' });
     }
 
-    // Find valid reset token
-    const tokenQuery = isPostgres
-      ? 'SELECT * FROM password_reset_tokens WHERE token = $1 AND used = 0 AND expires_at > $2'
-      : 'SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0 AND expires_at > ?';
-    const resetToken = isPostgres
-      ? (await db.query(tokenQuery, [token, new Date().toISOString()])).rows[0]
-      : db.prepare(tokenQuery).get(token, new Date().toISOString());
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: 'As passwords não coincidem' });
+    }
 
-    if (!resetToken) {
-      return res.status(400).json({ error: 'Link de recuperação inválido ou expirado' });
+    const normalizedEmail = normalizeEmail(email);
+
+    // Get user
+    const userQuery = isPostgres
+      ? 'SELECT id FROM users WHERE email = $1'
+      : 'SELECT id FROM users WHERE email = ?';
+    const user = isPostgres
+      ? (await db.query(userQuery, [normalizedEmail])).rows[0]
+      : db.prepare(userQuery).get(normalizedEmail);
+
+    if (!user) {
+      return res.status(404).json({ error: 'Utilizador não encontrado' });
+    }
+
+    // Check if there's an approved reset request
+    const requestQuery = isPostgres
+      ? 'SELECT * FROM password_reset_requests WHERE user_id = $1 AND status = $2 ORDER BY requested_at DESC LIMIT 1'
+      : 'SELECT * FROM password_reset_requests WHERE user_id = ? AND status = ? ORDER BY requested_at DESC LIMIT 1';
+    const resetRequest = isPostgres
+      ? (await db.query(requestQuery, [user.id, 'approved'])).rows[0]
+      : db.prepare(requestQuery).get(user.id, 'approved');
+
+    if (!resetRequest) {
+      return res.status(400).json({ error: 'Não existe um pedido de reset aprovado para este utilizador. Aguarde a aprovação do administrador.' });
     }
 
     // Hash new password
@@ -411,19 +536,9 @@ router.post('/reset-password/:token', async (req, res) => {
       ? 'UPDATE users SET password = $1 WHERE id = $2'
       : 'UPDATE users SET password = ? WHERE id = ?';
     if (isPostgres) {
-      await db.query(updateQuery, [hashedPassword, resetToken.user_id]);
+      await db.query(updateQuery, [hashedPassword, user.id]);
     } else {
-      db.prepare(updateQuery).run(hashedPassword, resetToken.user_id);
-    }
-
-    // Mark token as used
-    const tokenUpdateQuery = isPostgres
-      ? 'UPDATE password_reset_tokens SET used = 1 WHERE id = $1'
-      : 'UPDATE password_reset_tokens SET used = 1 WHERE id = ?';
-    if (isPostgres) {
-      await db.query(tokenUpdateQuery, [resetToken.id]);
-    } else {
-      db.prepare(tokenUpdateQuery).run(resetToken.id);
+      db.prepare(updateQuery).run(hashedPassword, user.id);
     }
 
     res.json({ message: 'Password redefinida com sucesso' });

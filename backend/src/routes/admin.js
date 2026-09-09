@@ -95,9 +95,11 @@ router.post('/users/:userId/reject', authenticateToken, requireAdmin, async (req
 router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const sql = `
-      SELECT id, email, status, role, created_at, last_login
-      FROM users
-      ORDER BY created_at DESC
+      SELECT u.id, u.email, u.status, u.role, u.created_at, u.last_login,
+             CASE WHEN prr.id IS NOT NULL AND prr.status = 'pending' THEN 1 ELSE 0 END as has_pending_reset
+      FROM users u
+      LEFT JOIN password_reset_requests prr ON u.id = prr.user_id AND prr.status = 'pending'
+      ORDER BY u.created_at DESC
     `;
     const usersResult = await query(sql, []);
     const users = isPostgres ? usersResult.rows : usersResult;

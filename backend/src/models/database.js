@@ -114,6 +114,18 @@ async function initializeDatabase() {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS password_reset_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+        requested_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        processed_at TEXT,
+        processed_by INTEGER,
+        new_password TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL
+      );
+
       CREATE TABLE IF NOT EXISTS error_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         level TEXT DEFAULT 'error' CHECK(level IN ('error', 'warning', 'info')),
@@ -231,6 +243,16 @@ async function initializeDatabase() {
         expires_at VARCHAR(100) NOT NULL,
         used INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS password_reset_requests (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status VARCHAR(50) DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+        requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        processed_at TIMESTAMP,
+        processed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        new_password VARCHAR(255)
       );
 
       CREATE TABLE IF NOT EXISTS error_logs (

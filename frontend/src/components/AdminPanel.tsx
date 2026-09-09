@@ -24,6 +24,7 @@ interface AllUser {
   role: string;
   created_at: string;
   last_login?: string;
+  has_pending_reset?: boolean;
 }
 
 interface LogEntry {
@@ -45,15 +46,27 @@ interface EmailConfig {
   frontendUrl: string;
 }
 
+interface PasswordResetRequest {
+  id: number;
+  user_id: number;
+  email: string;
+  user_role: string;
+  status: string;
+  requested_at: string;
+  processed_at?: string;
+  processed_by?: number;
+}
+
 export function AdminPanel() {
   const { user } = useAuth();
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [allUsers, setAllUsers] = useState<AllUser[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [emailConfig, setEmailConfig] = useState<EmailConfig | null>(null);
+  const [passwordResetRequests, setPasswordResetRequests] = useState<PasswordResetRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'logs' | 'config'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'logs' | 'config' | 'password-reset'>('pending');
   const [logFilter, setLogFilter] = useState<'all' | 'error' | 'warning' | 'info'>('all');
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
 
@@ -66,6 +79,9 @@ export function AdminPanel() {
       }
       if (activeTab === 'config') {
         loadEmailConfig();
+      }
+      if (activeTab === 'password-reset') {
+        loadPasswordResetRequests();
       }
     }
   }, [user, activeTab, logFilter]);
@@ -117,6 +133,18 @@ export function AdminPanel() {
       setEmailConfig(response.data);
     } catch (error) {
       console.error('Failed to load email config:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPasswordResetRequests = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/auth/password-reset-requests');
+      setPasswordResetRequests(response.data);
+    } catch (error) {
+      console.error('Failed to load password reset requests:', error);
     } finally {
       setLoading(false);
     }
@@ -202,6 +230,36 @@ export function AdminPanel() {
     }
   };
 
+  const handleApproveResetRequest = async (requestId: number) => {
+    setActionLoading(requestId);
+    try {
+      await api.post(`/auth/password-reset-requests/${requestId}/approve`, {});
+      alert('Pedido de reset aprovado com sucesso!');
+      loadPasswordResetRequests();
+    } catch (error) {
+      console.error('Failed to approve reset request:', error);
+      alert('Erro ao aprovar pedido de reset');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRejectResetRequest = async (requestId: number) => {
+    if (!confirm('Tem a certeza que deseja rejeitar este pedido de reset?')) return;
+
+    setActionLoading(requestId);
+    try {
+      await api.post(`/auth/password-reset-requests/${requestId}/reject`, {});
+      alert('Pedido de reset rejeitado com sucesso!');
+      loadPasswordResetRequests();
+    } catch (error) {
+      console.error('Failed to reject reset request:', error);
+      alert('Erro ao rejeitar pedido de reset');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleClearLogs = async () => {
     if (!confirm('Tem a certeza que deseja limpar os logs antigos (mais de 30 dias)?')) {
       return;
@@ -265,6 +323,16 @@ export function AdminPanel() {
             }`}
           >
             Todos os Utilizadores ({allUsers.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('password-reset')}
+            className={`px-4 py-2 border-b-2 transition-colors ${
+              activeTab === 'password-reset'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Reset Password ({passwordResetRequests.length})
           </button>
           <button
             onClick={() => setActiveTab('logs')}
@@ -399,6 +467,11 @@ export function AdminPanel() {
                             Rejeitado
                           </span>
                         )}
+                        {allUser.has_pending_reset && (
+                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded flex items-center">
+                            🔑 Reset Pendente
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-gray-600">
                         Registado em: {new Date(allUser.created_at).toLocaleDateString('pt-PT')}
@@ -430,6 +503,57 @@ export function AdminPanel() {
                           {actionLoading === allUser.id ? '...' : 'Despromover'}
                         </Button>
                       )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'password-reset' && (
+          <>
+            <h3 className="font-semibold mb-4">Pedidos de Reset de Password</h3>
+
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto"></div>
+              </div>
+            ) : passwordResetRequests.length === 0 ? (
+              <p className="text-gray-600 text-center py-4">Sem pedidos de reset pendentes</p>
+            ) : (
+              <div className="space-y-3">
+                {passwordResetRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg"
+                  >
+                    <div>
+                      <p className="font-medium">{request.email}</p>
+                      <p className="text-sm text-gray-600">
+                        Pedido em: {new Date(request.requested_at).toLocaleString('pt-PT')}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Role: {request.user_role}
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button
+                        onClick={() => handleApproveResetRequest(request.id)}
+                        disabled={actionLoading === request.id}
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        {actionLoading === request.id ? '...' : 'Aprovar'}
+                      </Button>
+                      <Button
+                        onClick={() => handleRejectResetRequest(request.id)}
+                        disabled={actionLoading === request.id}
+                        size="sm"
+                        variant="destructive"
+                      >
+                        {actionLoading === request.id ? '...' : 'Rejeitar'}
+                      </Button>
                     </div>
                   </div>
                 ))}

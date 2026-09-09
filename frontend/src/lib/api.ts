@@ -51,6 +51,9 @@ export const authAPI = {
   resetPassword: (token: string, newPassword: string) =>
     api.post<{ message: string }>(`/auth/reset-password/${token}`, { newPassword }),
 
+  resetPasswordDirect: (email: string, newPassword: string, confirmPassword: string) =>
+    api.post<{ message: string }>('/auth/reset-password', { email, newPassword, confirmPassword }),
+
   approveByToken: (token: string) =>
     api.post<{ message: string }>(`/auth/approve/${token}`),
 

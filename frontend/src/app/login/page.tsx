@@ -18,19 +18,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [resetToken, setResetToken] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const resetParam = urlParams.get('reset');
     const approveParam = urlParams.get('approve');
-    if (resetParam) {
-      setResetToken(resetParam);
-      setMode('reset');
-    }
     if (approveParam) {
       authAPI.approveByToken(approveParam)
         .then(() => {
@@ -70,10 +66,19 @@ export default function LoginPage() {
         setMode('login');
       } else if (mode === 'forgot') {
         const response = await authAPI.forgotPassword(email);
-        setSuccess(response.data.message || 'Se existir uma conta com este email, enviámos um link de recuperação.');
+        setSuccess(response.data.message || 'Aguarde a redefinição pelo administrador.');
+        setEmail('');
       } else if (mode === 'reset') {
-        await authAPI.resetPassword(resetToken, newPassword);
+        if (newPassword !== resetConfirmPassword) {
+          setError('As passwords não coincidem');
+          setLoading(false);
+          return;
+        }
+        await authAPI.resetPasswordDirect(resetEmail, newPassword, resetConfirmPassword);
         setSuccess('Password redefinida com sucesso!');
+        setResetEmail('');
+        setNewPassword('');
+        setResetConfirmPassword('');
         setMode('login');
       }
     } catch (err: any) {
@@ -90,32 +95,48 @@ export default function LoginPage() {
           <CardTitle className="text-3xl text-center text-primary-600">
             {mode === 'login' ? 'Entrar' :
              mode === 'register' ? 'Registar' :
-             mode === 'forgot' ? 'Recuperar Password' :
-             'Nova Password'}
+             mode === 'forgot' ? 'Pedir Reset de Password' :
+             'Redefinir Password'}
           </CardTitle>
           <p className="text-center text-gray-600 mt-2">
             {mode === 'login' ? 'Bem-vindo de volta!' :
              mode === 'register' ? 'Crie a sua conta' :
-             mode === 'forgot' ? 'Introduza o seu email' :
-             'Defina a sua nova password'}
+             mode === 'forgot' ? 'Introduza o seu email para pedir reset' :
+             'Introduza o seu email e nova password'}
           </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                required
-                disabled={mode === 'reset'}
-              />
-            </div>
+            {mode !== 'reset' && (
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  required
+                />
+              </div>
+            )}
+            {mode === 'reset' && (
+              <div>
+                <label htmlFor="resetEmail" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <Input
+                  id="resetEmail"
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  required
+                />
+              </div>
+            )}
             {mode !== 'forgot' && mode !== 'reset' && (
               <>
                 <div>
@@ -153,19 +174,6 @@ export default function LoginPage() {
             {mode === 'reset' && (
               <>
                 <div>
-                  <label htmlFor="resetToken" className="block text-sm font-medium text-gray-700 mb-1">
-                    Token de Recuperação
-                  </label>
-                  <Input
-                    id="resetToken"
-                    type="text"
-                    value={resetToken}
-                    onChange={(e) => setResetToken(e.target.value)}
-                    placeholder="Cole o token aqui"
-                    required
-                  />
-                </div>
-                <div>
                   <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
                     Nova Password
                   </label>
@@ -174,6 +182,20 @@ export default function LoginPage() {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="resetConfirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirmar Nova Password
+                  </label>
+                  <Input
+                    id="resetConfirmPassword"
+                    type="password"
+                    value={resetConfirmPassword}
+                    onChange={(e) => setResetConfirmPassword(e.target.value)}
                     placeholder="••••••••"
                     required
                     minLength={6}
@@ -199,7 +221,7 @@ export default function LoginPage() {
               {loading ? 'A processar...' :
                mode === 'login' ? 'Entrar' :
                mode === 'register' ? 'Registar' :
-               mode === 'forgot' ? 'Enviar Link' :
+               mode === 'forgot' ? 'Pedir Reset' :
                'Redefinir Password'}
             </Button>
           </form>
@@ -223,10 +245,23 @@ export default function LoginPage() {
                     setMode('forgot');
                     setError('');
                     setSuccess('');
+                    setEmail('');
                   }}
                   className="block text-primary-600 hover:text-primary-700 text-sm"
                 >
                   Esqueceu a password?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('reset');
+                    setError('');
+                    setSuccess('');
+                    setResetEmail('');
+                  }}
+                  className="block text-primary-600 hover:text-primary-700 text-sm"
+                >
+                  Redefinir password (com aprovação)
                 </button>
               </>
             )}
@@ -246,17 +281,30 @@ export default function LoginPage() {
               </button>
             )}
             {mode === 'forgot' && (
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('login');
-                  setError('');
-                  setSuccess('');
-                }}
-                className="text-primary-600 hover:text-primary-700 text-sm"
-              >
-                Voltar ao login
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('reset');
+                    setError('');
+                    setSuccess('');
+                  }}
+                  className="block text-primary-600 hover:text-primary-700 text-sm"
+                >
+                  Já tem aprovação? Redefinir password
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setError('');
+                    setSuccess('');
+                  }}
+                  className="block text-primary-600 hover:text-primary-700 text-sm"
+                >
+                  Voltar ao login
+                </button>
+              </>
             )}
             {mode === 'reset' && (
               <button
