@@ -11,7 +11,7 @@ const API_URL = 'http://localhost:3001/api';
 async function testForgotPassword() {
   console.log('=== Teste de Reset de Password ===\n');
   
-  const testEmail = 'luiszambujo@hotmail.com';
+  const testEmail = 'luislzandroid@gmail.com';
   
   try {
     console.log(`📧 Enviando pedido de reset para: ${testEmail}`);
