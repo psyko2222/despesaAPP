@@ -61,7 +61,11 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
         recurrence_months: recurring ? recurrenceMonths : 1,
       };
 
-      console.log('=== DEBUG: Sending expense data ===', expenseData, new Date().toISOString());
+      console.log('=== DEBUG: Sending expense data ===', { 
+        ...expenseData, 
+        currentRecurrenceMonthsState: recurrenceMonths,
+        isRecurring: recurring 
+      }, new Date().toISOString());
 
       if (initialExpense) {
         await expensesAPI.update(initialExpense.id, expenseData, userId);
@@ -160,7 +164,15 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
                   </label>
                   <select
                     value={recurrenceMonths}
-                    onChange={(e) => setRecurrenceMonths(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const newValue = parseInt(e.target.value);
+                      console.log('=== DEBUG: Select changed ===', { 
+                        oldValue: recurrenceMonths, 
+                        newValue: newValue,
+                        optionText: e.target.options[e.target.selectedIndex].text 
+                      });
+                      setRecurrenceMonths(newValue);
+                    }}
                     className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
                   >
                     <option value={1}>Mensal</option>
