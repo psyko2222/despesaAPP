@@ -32,8 +32,24 @@ api.interceptors.request.use((config) => {
 
 // Handle 401 errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Debug logging for POST responses
+    if (response.config.method === 'post' && response.config.url?.includes('/expenses')) {
+      console.log('=== DEBUG: API Response ===', {
+        url: response.config.url,
+        status: response.status,
+        data: response.data
+      });
+    }
+    return response;
+  },
   (error) => {
+    console.log('=== DEBUG: API Error ===', {
+      url: error.config?.url,
+      status: error.response?.status,
+      error: error.message
+    });
+    
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
