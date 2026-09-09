@@ -503,6 +503,16 @@ export function AdminPanel() {
                           {actionLoading === allUser.id ? '...' : 'Despromover'}
                         </Button>
                       )}
+                      {allUser.id !== user?.id && (
+                        <Button
+                          onClick={() => handleDeleteUser(allUser.id)}
+                          disabled={actionLoading === allUser.id}
+                          size="sm"
+                          variant="destructive"
+                        >
+                          {actionLoading === allUser.id ? '...' : 'Apagar'}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
