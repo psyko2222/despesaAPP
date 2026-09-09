@@ -200,38 +200,23 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
 
       let nextDate = new Date(finalDebitDate);
 
+      console.log('Generating recurring expenses:', {
+        startDate: finalDebitDate,
+        recurrenceMonths: normalizedMonths,
+        horizon: horizon.toISOString().split('T')[0]
+      });
+
       // Skip past occurrences, start from current or future
       while (nextDate < today) {
-        // More robust date increment that handles month boundaries correctly
-        const currentYear = nextDate.getFullYear();
-        const currentMonth = nextDate.getMonth();
-        const currentDay = nextDate.getDate();
-        
-        // Calculate new month and year with proper overflow handling
-        const newTotalMonths = currentYear * 12 + currentMonth + normalizedMonths;
-        const newYear = Math.floor(newTotalMonths / 12);
-        const newMonth = newTotalMonths % 12;
-        
-        // Set to first day of new month to avoid overflow issues
-        nextDate = new Date(newYear, newMonth, 1);
-        
-        // Then set the day, handling cases where the day doesn't exist in the target month
-        const lastDayOfMonth = new Date(newYear, newMonth + 1, 0).getDate();
-        const targetDay = Math.min(day, lastDayOfMonth);
-        nextDate.setDate(targetDay);
+        console.log('Skipping past date:', nextDate.toISOString().split('T')[0]);
+        nextDate.setMonth(nextDate.getMonth() + normalizedMonths);
       }
 
       // Generate future occurrences up to horizon
+      let occurrenceCount = 0;
       while (nextDate <= horizon) {
-        // Use the original day to calculate the target date, respecting periodicity
-        const targetYear = nextDate.getFullYear();
-        const targetMonth = nextDate.getMonth();
-        const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-        const targetDay = Math.min(day, lastDayOfMonth);
-        
-        // Create the target date without weekend adjustment to preserve periodicity
-        let targetDate = new Date(targetYear, targetMonth, targetDay);
-        const debitDateStr = targetDate.toISOString().split('T')[0];
+        const debitDateStr = nextDate.toISOString().split('T')[0];
+        console.log('Generating occurrence for:', debitDateStr);
 
         const existingSql = isPostgres
           ? 'SELECT id FROM expenses WHERE series_id = $1 AND debit_date = $2'
@@ -261,25 +246,13 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
             normalizedMonths
           ];
           await run(occurrenceSql, occurrenceParams);
+          occurrenceCount++;
         }
 
-        // More robust date increment for the next occurrence
-        const currentYear = nextDate.getFullYear();
-        const currentMonth = nextDate.getMonth();
-        
-        // Calculate new month and year with proper overflow handling
-        const newTotalMonths = currentYear * 12 + currentMonth + normalizedMonths;
-        const newYear = Math.floor(newTotalMonths / 12);
-        const newMonth = newTotalMonths % 12;
-        
-        // Set to first day of new month to avoid overflow issues
-        nextDate = new Date(newYear, newMonth, 1);
-        
-        // Then set the day, handling cases where the day doesn't exist in the target month
-        const nextLastDay = new Date(newYear, newMonth + 1, 0).getDate();
-        const nextTargetDay = Math.min(day, nextLastDay);
-        nextDate.setDate(nextTargetDay);
+        nextDate.setMonth(nextDate.getMonth() + normalizedMonths);
       }
+
+      console.log('Total occurrences generated:', occurrenceCount);
     }
 
     const expense = await queryOne(
@@ -544,34 +517,11 @@ router.post('/ensure-future', authenticateToken, async (req, res) => {
 
       // Skip past occurrences, start from current or future
       while (nextDate < today) {
-        // More robust date increment that handles month boundaries correctly
-        const currentYear = nextDate.getFullYear();
-        const currentMonth = nextDate.getMonth();
-        
-        // Calculate new month and year with proper overflow handling
-        const newTotalMonths = currentYear * 12 + currentMonth + interval;
-        const newYear = Math.floor(newTotalMonths / 12);
-        const newMonth = newTotalMonths % 12;
-        
-        // Set to first day of new month to avoid overflow issues
-        nextDate = new Date(newYear, newMonth, 1);
-        
-        // Then set the day, handling cases where the day doesn't exist in the target month
-        const lastDayOfMonth = new Date(newYear, newMonth + 1, 0).getDate();
-        const targetDay = Math.min(latest.original_day, lastDayOfMonth);
-        nextDate.setDate(targetDay);
+        nextDate.setMonth(nextDate.getMonth() + interval);
       }
 
       while (nextDate <= horizon) {
-        // Use the original day to calculate the target date, respecting periodicity
-        const targetYear = nextDate.getFullYear();
-        const targetMonth = nextDate.getMonth();
-        const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-        const targetDay = Math.min(latest.original_day, lastDayOfMonth);
-        
-        // Create the target date without weekend adjustment to preserve periodicity
-        let targetDate = new Date(targetYear, targetMonth, targetDay);
-        const debitDateStr = targetDate.toISOString().split('T')[0];
+        const debitDateStr = nextDate.toISOString().split('T')[0];
 
         const existingSql = isPostgres
           ? 'SELECT id FROM expenses WHERE series_id = $1 AND debit_date = $2'
@@ -602,22 +552,7 @@ router.post('/ensure-future', authenticateToken, async (req, res) => {
           ]);
         }
 
-        // More robust date increment for the next occurrence
-        const currentYear = nextDate.getFullYear();
-        const currentMonth = nextDate.getMonth();
-        
-        // Calculate new month and year with proper overflow handling
-        const newTotalMonths = currentYear * 12 + currentMonth + interval;
-        const newYear = Math.floor(newTotalMonths / 12);
-        const newMonth = newTotalMonths % 12;
-        
-        // Set to first day of new month to avoid overflow issues
-        nextDate = new Date(newYear, newMonth, 1);
-        
-        // Then set the day, handling cases where the day doesn't exist in the target month
-        const nextLastDay = new Date(newYear, newMonth + 1, 0).getDate();
-        const nextTargetDay = Math.min(latest.original_day, nextLastDay);
-        nextDate.setDate(nextTargetDay);
+        nextDate.setMonth(nextDate.getMonth() + interval);
       }
     }
 
