@@ -207,13 +207,20 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
 
       // Generate future occurrences up to horizon
       while (nextDate <= horizon) {
-        const monthStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
-        const adjustedDate = adjustedDebitDate(monthStr, day);
+        // Use the original day to calculate the target date, respecting periodicity
+        const targetYear = nextDate.getFullYear();
+        const targetMonth = nextDate.getMonth();
+        const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+        const targetDay = Math.min(day, lastDayOfMonth);
+        
+        // Create the target date without weekend adjustment to preserve periodicity
+        let targetDate = new Date(targetYear, targetMonth, targetDay);
+        const debitDateStr = targetDate.toISOString().split('T')[0];
 
         const existingSql = isPostgres
           ? 'SELECT id FROM expenses WHERE series_id = $1 AND debit_date = $2'
           : 'SELECT id FROM expenses WHERE series_id = ? AND debit_date = ?';
-        const existing = await queryOne(existingSql, [expenseId, adjustedDate]);
+        const existing = await queryOne(existingSql, [expenseId, debitDateStr]);
 
         if (!existing) {
           // Android rules:
@@ -230,7 +237,7 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
             expenseId,
             description,
             amountCents,
-            adjustedDate,
+            debitDateStr,
             0, // Always start as not paid (Android behavior)
             1,
             finalFixedAmount ? 1 : 0,
@@ -510,13 +517,20 @@ router.post('/ensure-future', authenticateToken, async (req, res) => {
       }
 
       while (nextDate <= horizon) {
-        const monthStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
-        const adjustedDate = adjustedDebitDate(monthStr, latest.original_day);
+        // Use the original day to calculate the target date, respecting periodicity
+        const targetYear = nextDate.getFullYear();
+        const targetMonth = nextDate.getMonth();
+        const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+        const targetDay = Math.min(latest.original_day, lastDayOfMonth);
+        
+        // Create the target date without weekend adjustment to preserve periodicity
+        let targetDate = new Date(targetYear, targetMonth, targetDay);
+        const debitDateStr = targetDate.toISOString().split('T')[0];
 
         const existingSql = isPostgres
           ? 'SELECT id FROM expenses WHERE series_id = $1 AND debit_date = $2'
           : 'SELECT id FROM expenses WHERE series_id = ? AND debit_date = ?';
-        const existing = await queryOne(existingSql, [seriesId, adjustedDate]);
+        const existing = await queryOne(existingSql, [seriesId, debitDateStr]);
 
         if (!existing) {
           // Android rules:
@@ -533,7 +547,7 @@ router.post('/ensure-future', authenticateToken, async (req, res) => {
             seriesId,
             latest.description,
             amountCents,
-            adjustedDate,
+            debitDateStr,
             0, // Always start as not paid (Android behavior)
             1,
             latest.fixed_amount ? 1 : 0,
