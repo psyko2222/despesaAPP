@@ -1,19 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, checkDataAccess, requireWriteAccess } = require('../middleware/auth');
-const { db } = require('../models/database');
+const { db, isPostgres, queryOne, run } = require('../models/database');
 
 // Get user settings
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const settings = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId);
+    const sql = isPostgres
+      ? 'SELECT * FROM settings WHERE user_id = $1'
+      : 'SELECT * FROM settings WHERE user_id = ?';
+    const settings = await queryOne(sql, [userId]);
     
     if (!settings) {
       // Create default settings if not exist
-      db.prepare('INSERT INTO settings (user_id) VALUES (?)').run(userId);
-      const newSettings = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId);
+      const insertSql = isPostgres
+        ? 'INSERT INTO settings (user_id) VALUES ($1)'
+        : 'INSERT INTO settings (user_id) VALUES (?)';
+      await run(insertSql, [userId]);
+      const newSettings = await queryOne(sql, [userId]);
       return res.json(newSettings);
     }
 
@@ -25,7 +31,7 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // Update settings
-router.put('/', authenticateToken, (req, res) => {
+router.put('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const {
@@ -46,44 +52,91 @@ router.put('/', authenticateToken, (req, res) => {
       auto_cleanup_years
     } = req.body;
 
-    db.prepare(`
-      UPDATE settings SET
-        notifications_enabled = ?,
-        debit_notifications_enabled = ?,
-        debit_reminder_days = ?,
-        debit_reminder_hour = ?,
-        debit_reminder_minute = ?,
-        variable_reminder_enabled = ?,
-        variable_reminder_day = ?,
-        variable_reminder_hour = ?,
-        variable_reminder_minute = ?,
-        variable_snooze_minutes = ?,
-        tolerance = ?,
-        stats_window_months = ?,
-        terms_accepted_version = ?,
-        terms_accepted_at = ?,
-        auto_cleanup_years = ?
-      WHERE user_id = ?
-    `).run(
-      notifications_enabled !== undefined ? (notifications_enabled ? 1 : 0) : undefined,
-      debit_notifications_enabled !== undefined ? (debit_notifications_enabled ? 1 : 0) : undefined,
-      debit_reminder_days,
-      debit_reminder_hour,
-      debit_reminder_minute,
-      variable_reminder_enabled !== undefined ? (variable_reminder_enabled ? 1 : 0) : undefined,
-      variable_reminder_day,
-      variable_reminder_hour,
-      variable_reminder_minute,
-      variable_snooze_minutes,
-      tolerance,
-      stats_window_months,
-      terms_accepted_version,
-      terms_accepted_at,
-      auto_cleanup_years !== undefined ? auto_cleanup_years : undefined,
-      userId
-    );
+    // Build dynamic update query to handle undefined values
+    const updates = [];
+    const params = [];
+    let paramIndex = 1;
 
-    const settings = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId);
+    if (notifications_enabled !== undefined) {
+      updates.push(isPostgres ? `notifications_enabled = $${paramIndex++}` : `notifications_enabled = ?`);
+      params.push(notifications_enabled ? 1 : 0);
+    }
+    if (debit_notifications_enabled !== undefined) {
+      updates.push(isPostgres ? `debit_notifications_enabled = $${paramIndex++}` : `debit_notifications_enabled = ?`);
+      params.push(debit_notifications_enabled ? 1 : 0);
+    }
+    if (debit_reminder_days !== undefined) {
+      updates.push(isPostgres ? `debit_reminder_days = $${paramIndex++}` : `debit_reminder_days = ?`);
+      params.push(debit_reminder_days);
+    }
+    if (debit_reminder_hour !== undefined) {
+      updates.push(isPostgres ? `debit_reminder_hour = $${paramIndex++}` : `debit_reminder_hour = ?`);
+      params.push(debit_reminder_hour);
+    }
+    if (debit_reminder_minute !== undefined) {
+      updates.push(isPostgres ? `debit_reminder_minute = $${paramIndex++}` : `debit_reminder_minute = ?`);
+      params.push(debit_reminder_minute);
+    }
+    if (variable_reminder_enabled !== undefined) {
+      updates.push(isPostgres ? `variable_reminder_enabled = $${paramIndex++}` : `variable_reminder_enabled = ?`);
+      params.push(variable_reminder_enabled ? 1 : 0);
+    }
+    if (variable_reminder_day !== undefined) {
+      updates.push(isPostgres ? `variable_reminder_day = $${paramIndex++}` : `variable_reminder_day = ?`);
+      params.push(variable_reminder_day);
+    }
+    if (variable_reminder_hour !== undefined) {
+      updates.push(isPostgres ? `variable_reminder_hour = $${paramIndex++}` : `variable_reminder_hour = ?`);
+      params.push(variable_reminder_hour);
+    }
+    if (variable_reminder_minute !== undefined) {
+      updates.push(isPostgres ? `variable_reminder_minute = $${paramIndex++}` : `variable_reminder_minute = ?`);
+      params.push(variable_reminder_minute);
+    }
+    if (variable_snooze_minutes !== undefined) {
+      updates.push(isPostgres ? `variable_snooze_minutes = $${paramIndex++}` : `variable_snooze_minutes = ?`);
+      params.push(variable_snooze_minutes);
+    }
+    if (tolerance !== undefined) {
+      updates.push(isPostgres ? `tolerance = $${paramIndex++}` : `tolerance = ?`);
+      params.push(tolerance);
+    }
+    if (stats_window_months !== undefined) {
+      updates.push(isPostgres ? `stats_window_months = $${paramIndex++}` : `stats_window_months = ?`);
+      params.push(stats_window_months);
+    }
+    if (terms_accepted_version !== undefined) {
+      updates.push(isPostgres ? `terms_accepted_version = $${paramIndex++}` : `terms_accepted_version = ?`);
+      params.push(terms_accepted_version);
+    }
+    if (terms_accepted_at !== undefined) {
+      updates.push(isPostgres ? `terms_accepted_at = $${paramIndex++}` : `terms_accepted_at = ?`);
+      params.push(terms_accepted_at);
+    }
+    if (auto_cleanup_years !== undefined) {
+      updates.push(isPostgres ? `auto_cleanup_years = $${paramIndex++}` : `auto_cleanup_years = ?`);
+      params.push(auto_cleanup_years);
+    }
+
+    if (updates.length === 0) {
+      // No fields to update, just return current settings
+      const sql = isPostgres
+        ? 'SELECT * FROM settings WHERE user_id = $1'
+        : 'SELECT * FROM settings WHERE user_id = ?';
+      const settings = await queryOne(sql, [userId]);
+      return res.json(settings);
+    }
+
+    updates.push(isPostgres ? `user_id = $${paramIndex++}` : `user_id = ?`);
+    params.push(userId);
+
+    const updateSql = `UPDATE settings SET ${updates.join(', ')}`;
+    await run(updateSql, params);
+
+    const sql = isPostgres
+      ? 'SELECT * FROM settings WHERE user_id = $1'
+      : 'SELECT * FROM settings WHERE user_id = ?';
+    const settings = await queryOne(sql, [userId]);
     res.json(settings);
   } catch (error) {
     console.error('Update settings error:', error);
@@ -92,13 +145,13 @@ router.put('/', authenticateToken, (req, res) => {
 });
 
 // Update specific setting
-router.patch('/:key', authenticateToken, (req, res) => {
+router.patch('/:key', authenticateToken, async (req, res) => {
   try {
     const { key } = req.params;
     const { value } = req.body;
     const userId = req.user.id;
 
-    // Validate key
+    // Validate key to prevent SQL injection
     const validKeys = [
       'notifications_enabled', 'debit_notifications_enabled', 'debit_reminder_days',
       'debit_reminder_hour', 'debit_reminder_minute', 'variable_reminder_enabled',
@@ -111,9 +164,16 @@ router.patch('/:key', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Invalid setting key' });
     }
 
-    db.prepare(`UPDATE settings SET ${key} = ? WHERE user_id = ?`).run(value, userId);
+    // Build the update query safely using the validated key
+    const updateSql = isPostgres
+      ? `UPDATE settings SET ${key} = $1 WHERE user_id = $2`
+      : `UPDATE settings SET ${key} = ? WHERE user_id = ?`;
+    await run(updateSql, [value, userId]);
 
-    const settings = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId);
+    const sql = isPostgres
+      ? 'SELECT * FROM settings WHERE user_id = $1'
+      : 'SELECT * FROM settings WHERE user_id = ?';
+    const settings = await queryOne(sql, [userId]);
     res.json(settings);
   } catch (error) {
     console.error('Update setting error:', error);

@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { db, isPostgres } = require('../models/database');
+const { db, isPostgres, query, queryOne, run } = require('../models/database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 // Get all pending users
 router.get('/users/pending', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const query = `
+    const pendingUsersSql = `
       SELECT u.id, u.email, u.created_at, u.status, u.role,
              at.token as approval_token, at.expires_at
       FROM users u
@@ -14,9 +14,8 @@ router.get('/users/pending', authenticateToken, requireAdmin, async (req, res) =
       WHERE u.status = 'pending'
       ORDER BY u.created_at DESC
     `;
-    const pendingUsers = isPostgres
-      ? (await db.query(query)).rows
-      : db.prepare(query).all();
+    const pendingUsersResult = await query(pendingUsersSql, []);
+    const pendingUsers = isPostgres ? pendingUsersResult.rows : pendingUsersResult;
 
     res.json(pendingUsers);
   } catch (error) {
@@ -26,18 +25,27 @@ router.get('/users/pending', authenticateToken, requireAdmin, async (req, res) =
 });
 
 // Approve user
-router.post('/users/:userId/approve', authenticateToken, requireAdmin, (req, res) => {
+router.post('/users/:userId/approve', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
 
     // Update user status
-    db.prepare('UPDATE users SET status = ? WHERE id = ?').run('approved', userId);
+    const updateStatusSql = isPostgres
+      ? 'UPDATE users SET status = $1 WHERE id = $2'
+      : 'UPDATE users SET status = ? WHERE id = ?';
+    await run(updateStatusSql, ['approved', userId]);
 
     // Mark approval token as used if exists
-    db.prepare('UPDATE user_approval_tokens SET used = 1 WHERE user_id = ?').run(userId);
+    const updateTokenSql = isPostgres
+      ? 'UPDATE user_approval_tokens SET used = 1 WHERE user_id = $1'
+      : 'UPDATE user_approval_tokens SET used = 1 WHERE user_id = ?';
+    await run(updateTokenSql, [userId]);
 
     // Get user details
-    const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(userId);
+    const userSql = isPostgres
+      ? 'SELECT id, email FROM users WHERE id = $1'
+      : 'SELECT id, email FROM users WHERE id = ?';
+    const user = await queryOne(userSql, [userId]);
 
     res.json({
       message: 'User approved successfully',
@@ -50,15 +58,21 @@ router.post('/users/:userId/approve', authenticateToken, requireAdmin, (req, res
 });
 
 // Reject user
-router.post('/users/:userId/reject', authenticateToken, requireAdmin, (req, res) => {
+router.post('/users/:userId/reject', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
 
     // Update user status
-    db.prepare('UPDATE users SET status = ? WHERE id = ?').run('rejected', userId);
+    const updateStatusSql = isPostgres
+      ? 'UPDATE users SET status = $1 WHERE id = $2'
+      : 'UPDATE users SET status = ? WHERE id = ?';
+    await run(updateStatusSql, ['rejected', userId]);
 
     // Mark approval token as used if exists
-    db.prepare('UPDATE user_approval_tokens SET used = 1 WHERE user_id = ?').run(userId);
+    const updateTokenSql = isPostgres
+      ? 'UPDATE user_approval_tokens SET used = 1 WHERE user_id = $1'
+      : 'UPDATE user_approval_tokens SET used = 1 WHERE user_id = ?';
+    await run(updateTokenSql, [userId]);
 
     res.json({ message: 'User rejected successfully' });
   } catch (error) {
@@ -68,13 +82,15 @@ router.post('/users/:userId/reject', authenticateToken, requireAdmin, (req, res)
 });
 
 // Get all users (admin only)
-router.get('/users', authenticateToken, requireAdmin, (req, res) => {
+router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const users = db.prepare(`
+    const sql = `
       SELECT id, email, status, role, created_at, last_login
       FROM users
       ORDER BY created_at DESC
-    `).all();
+    `;
+    const usersResult = await query(sql, []);
+    const users = isPostgres ? usersResult.rows : usersResult;
 
     res.json(users);
   } catch (error) {
@@ -84,15 +100,21 @@ router.get('/users', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Promote user to admin
-router.post('/users/:userId/promote', authenticateToken, requireAdmin, (req, res) => {
+router.post('/users/:userId/promote', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
 
     // Update user role to admin
-    db.prepare('UPDATE users SET role = ? WHERE id = ?').run('admin', userId);
+    const updateRoleSql = isPostgres
+      ? 'UPDATE users SET role = $1 WHERE id = $2'
+      : 'UPDATE users SET role = ? WHERE id = ?';
+    await run(updateRoleSql, ['admin', userId]);
 
     // Get user details
-    const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(userId);
+    const userSql = isPostgres
+      ? 'SELECT id, email, role FROM users WHERE id = $1'
+      : 'SELECT id, email, role FROM users WHERE id = ?';
+    const user = await queryOne(userSql, [userId]);
 
     res.json({
       message: 'User promoted to admin successfully',
@@ -105,7 +127,7 @@ router.post('/users/:userId/promote', authenticateToken, requireAdmin, (req, res
 });
 
 // Demote admin to user
-router.post('/users/:userId/demote', authenticateToken, requireAdmin, (req, res) => {
+router.post('/users/:userId/demote', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
 
@@ -115,16 +137,25 @@ router.post('/users/:userId/demote', authenticateToken, requireAdmin, (req, res)
     }
 
     // Check if this is the only admin
-    const adminCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin'").get();
+    const adminCountSql = isPostgres
+      ? "SELECT COUNT(*) as count FROM users WHERE role = 'admin'"
+      : "SELECT COUNT(*) as count FROM users WHERE role = 'admin'";
+    const adminCount = await queryOne(adminCountSql, []);
     if (adminCount.count <= 1) {
       return res.status(400).json({ error: 'Cannot demote the only admin' });
     }
 
     // Update user role to user
-    db.prepare('UPDATE users SET role = ? WHERE id = ?').run('user', userId);
+    const updateRoleSql = isPostgres
+      ? 'UPDATE users SET role = $1 WHERE id = $2'
+      : 'UPDATE users SET role = ? WHERE id = ?';
+    await run(updateRoleSql, ['user', userId]);
 
     // Get user details
-    const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(userId);
+    const userSql = isPostgres
+      ? 'SELECT id, email, role FROM users WHERE id = $1'
+      : 'SELECT id, email, role FROM users WHERE id = ?';
+    const user = await queryOne(userSql, [userId]);
 
     res.json({
       message: 'Admin demoted to user successfully',
@@ -137,7 +168,7 @@ router.post('/users/:userId/demote', authenticateToken, requireAdmin, (req, res)
 });
 
 // Delete user
-router.delete('/users/:userId', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/users/:userId', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
 
@@ -147,16 +178,25 @@ router.delete('/users/:userId', authenticateToken, requireAdmin, (req, res) => {
     }
 
     // Check if this is the only admin
-    const userToDelete = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
+    const userSql = isPostgres
+      ? 'SELECT role FROM users WHERE id = $1'
+      : 'SELECT role FROM users WHERE id = ?';
+    const userToDelete = await queryOne(userSql, [userId]);
     if (userToDelete && userToDelete.role === 'admin') {
-      const adminCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin'").get();
+      const adminCountSql = isPostgres
+        ? "SELECT COUNT(*) as count FROM users WHERE role = 'admin'"
+        : "SELECT COUNT(*) as count FROM users WHERE role = 'admin'";
+      const adminCount = await queryOne(adminCountSql, []);
       if (adminCount.count <= 1) {
         return res.status(400).json({ error: 'Cannot delete the only admin' });
       }
     }
 
     // Delete user (CASCADE will delete related data)
-    const result = db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    const deleteSql = isPostgres
+      ? 'DELETE FROM users WHERE id = $1'
+      : 'DELETE FROM users WHERE id = ?';
+    const result = await run(deleteSql, [userId]);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'User not found' });
@@ -173,7 +213,7 @@ router.delete('/users/:userId', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Delete old expenses
-router.delete('/expenses/cleanup', authenticateToken, (req, res) => {
+router.delete('/expenses/cleanup', authenticateToken, async (req, res) => {
   try {
     const { years } = req.query;
 
@@ -192,10 +232,10 @@ router.delete('/expenses/cleanup', authenticateToken, (req, res) => {
     const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
 
     // Delete expenses older than cutoff date for current user
-    const result = db.prepare(`
-      DELETE FROM expenses
-      WHERE user_id = ? AND debit_date < ?
-    `).run(req.user.id, cutoffDateStr);
+    const deleteSql = isPostgres
+      ? 'DELETE FROM expenses WHERE user_id = $1 AND debit_date < $2'
+      : 'DELETE FROM expenses WHERE user_id = ? AND debit_date < ?';
+    const result = await run(deleteSql, [req.user.id, cutoffDateStr]);
 
     res.json({
       message: `Deleted ${result.changes} expenses older than ${yearsNum} years`,
@@ -209,7 +249,7 @@ router.delete('/expenses/cleanup', authenticateToken, (req, res) => {
 });
 
 // Get expense cleanup statistics
-router.get('/expenses/cleanup/stats', authenticateToken, (req, res) => {
+router.get('/expenses/cleanup/stats', authenticateToken, async (req, res) => {
   try {
     const { years } = req.query;
 
@@ -223,15 +263,22 @@ router.get('/expenses/cleanup/stats', authenticateToken, (req, res) => {
     const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
 
     // Count expenses that would be deleted
-    const stats = db.prepare(`
-      SELECT
+    const statsSql = isPostgres
+      ? `SELECT
         COUNT(*) as total_to_delete,
         SUM(amount_cents) / 100.0 as total_amount,
         MIN(debit_date) as oldest_date,
         MAX(debit_date) as newest_date
       FROM expenses
-      WHERE user_id = ? AND debit_date < ?
-    `).get(req.user.id, cutoffDateStr);
+      WHERE user_id = $1 AND debit_date < $2`
+      : `SELECT
+        COUNT(*) as total_to_delete,
+        SUM(amount_cents) / 100.0 as total_amount,
+        MIN(debit_date) as oldest_date,
+        MAX(debit_date) as newest_date
+      FROM expenses
+      WHERE user_id = ? AND debit_date < ?`;
+    const stats = await queryOne(statsSql, [req.user.id, cutoffDateStr]);
 
     res.json({
       years: yearsNum,

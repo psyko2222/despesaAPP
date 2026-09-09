@@ -1,22 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
-const { db, normalizedRecurrenceMonths, currentFinancialPeriodMonth } = require('../models/database');
+const { db, isPostgres, normalizedRecurrenceMonths, currentFinancialPeriodMonth, query, queryOne, run, transaction } = require('../models/database');
 
 // Export all user data (expenses + settings)
-router.get('/export', authenticateToken, (req, res) => {
+router.get('/export', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
     // Get expenses
-    const expenses = db.prepare(`
-      SELECT * FROM expenses WHERE user_id = ? ORDER BY id
-    `).all(userId);
+    const expensesSql = isPostgres
+      ? 'SELECT * FROM expenses WHERE user_id = $1 ORDER BY id'
+      : 'SELECT * FROM expenses WHERE user_id = ? ORDER BY id';
+    const expensesResult = await query(expensesSql, [userId]);
+    const expenses = isPostgres ? expensesResult.rows : expensesResult;
 
     // Get settings
-    const settings = db.prepare(`
-      SELECT * FROM settings WHERE user_id = ?
-    `).get(userId);
+    const settingsSql = isPostgres
+      ? 'SELECT * FROM settings WHERE user_id = $1'
+      : 'SELECT * FROM settings WHERE user_id = ?';
+    const settings = await queryOne(settingsSql, [userId]);
 
     const backup = {
       format_version: 1,
@@ -34,7 +37,7 @@ router.get('/export', authenticateToken, (req, res) => {
 });
 
 // Import backup data
-router.post('/import', authenticateToken, (req, res) => {
+router.post('/import', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { format_version, expenses, settings } = req.body;
@@ -52,12 +55,19 @@ router.post('/import', authenticateToken, (req, res) => {
     });
 
     // Start transaction
-    const transaction = db.transaction(() => {
+    await transaction(async (client) => {
       // Delete existing expenses
-      db.prepare('DELETE FROM expenses WHERE user_id = ?').run(userId);
+      const deleteExpensesSql = isPostgres
+        ? 'DELETE FROM expenses WHERE user_id = $1'
+        : 'DELETE FROM expenses WHERE user_id = ?';
+      if (isPostgres) {
+        await client.query(deleteExpensesSql, [userId]);
+      } else {
+        await run(deleteExpensesSql, [userId]);
+      }
 
       // Import expenses (handle both Android and web formats)
-      expenses.forEach(expense => {
+      for (const expense of expenses) {
         // Handle Android format (amount_cents) vs web format (amount_cents)
         const amountCents = expense.amount_cents || (expense.amount ? Math.round(expense.amount * 100) : 0);
         
@@ -73,13 +83,11 @@ router.post('/import', authenticateToken, (req, res) => {
         // Handle Android format (active_series as 0/1) vs web format (active_series as boolean)
         const activeSeries = typeof expense.active_series === 'boolean' ? (expense.active_series ? 1 : 0) : (expense.active_series || 1);
 
-        db.prepare(`
-          INSERT INTO expenses (
-            user_id, series_id, description, amount_cents, debit_date,
-            paid, recurring, fixed_amount, original_day, active_series,
-            recurrence_months, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
+        const insertExpenseSql = isPostgres
+          ? 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, active_series, recurrence_months, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)'
+          : 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, active_series, recurrence_months, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        
+        const expenseParams = [
           userId,
           expense.series_id || null,
           expense.description,
@@ -93,8 +101,14 @@ router.post('/import', authenticateToken, (req, res) => {
           expense.recurrence_months || 1,
           expense.created_at || new Date().toISOString(),
           expense.updated_at || new Date().toISOString()
-        );
-      });
+        ];
+
+        if (isPostgres) {
+          await client.query(insertExpenseSql, expenseParams);
+        } else {
+          await run(insertExpenseSql, expenseParams);
+        }
+      }
 
       // Import settings if provided (handle Android format)
       if (settings) {
@@ -107,8 +121,27 @@ router.post('/import', authenticateToken, (req, res) => {
         const variableReminderEnabled = settings.variable_reminder_enabled !== undefined ?
           (typeof settings.variable_reminder_enabled === 'boolean' ? (settings.variable_reminder_enabled ? 1 : 0) : settings.variable_reminder_enabled) : 0;
 
-        db.prepare(`
-          UPDATE settings SET
+        const updateSettingsSql = isPostgres
+          ? `UPDATE settings SET
+            notifications_enabled = $1,
+            debit_notifications_enabled = $2,
+            debit_reminder_days = $3,
+            debit_reminder_hour = $4,
+            debit_reminder_minute = $5,
+            variable_reminder_enabled = $6,
+            variable_reminder_day = $7,
+            variable_reminder_hour = $8,
+            variable_reminder_minute = $9,
+            variable_snooze_minutes = $10,
+            tolerance = $11,
+            stats_window_months = $12,
+            stats_comparison = $13,
+            variable_reminder_time = $14,
+            variable_reminder_scheduled = $15,
+            terms_accepted_version = $16,
+            terms_accepted_at = $17
+          WHERE user_id = $18`
+          : `UPDATE settings SET
             notifications_enabled = ?,
             debit_notifications_enabled = ?,
             debit_reminder_days = ?,
@@ -126,8 +159,9 @@ router.post('/import', authenticateToken, (req, res) => {
             variable_reminder_scheduled = ?,
             terms_accepted_version = ?,
             terms_accepted_at = ?
-          WHERE user_id = ?
-        `).run(
+          WHERE user_id = ?`;
+        
+        const settingsParams = [
           notificationsEnabled,
           debitNotificationsEnabled,
           debitReminderDays,
@@ -146,34 +180,37 @@ router.post('/import', authenticateToken, (req, res) => {
           settings.terms_accepted_version || 0,
           settings.terms_accepted_at || null,
           userId
-        );
+        ];
+
+        if (isPostgres) {
+          await client.query(updateSettingsSql, settingsParams);
+        } else {
+          await run(updateSettingsSql, settingsParams);
+        }
       }
     });
-
-    transaction();
 
     // Ensure future occurrences after import
     const horizon = currentFinancialPeriodMonth();
     const horizonDate = new Date(horizon);
     horizonDate.setMonth(horizonDate.getMonth() + 18);
     
-    const recurringExpenses = db.prepare(`
-      SELECT * FROM expenses 
-      WHERE user_id = ? AND recurring = 1 AND active_series = 1 AND id = series_id
-    `).all(userId);
+    const recurringSql = isPostgres
+      ? 'SELECT * FROM expenses WHERE user_id = $1 AND recurring = 1 AND active_series = 1 AND id = series_id'
+      : 'SELECT * FROM expenses WHERE user_id = ? AND recurring = 1 AND active_series = 1 AND id = series_id';
+    const recurringExpensesResult = await query(recurringSql, [userId]);
+    const recurringExpenses = isPostgres ? recurringExpensesResult.rows : recurringExpensesResult;
 
-    recurringExpenses.forEach(root => {
+    for (const root of recurringExpenses) {
       const seriesId = root.series_id || root.id;
       
-      const latest = db.prepare(`
-        SELECT * FROM expenses 
-        WHERE series_id = ? AND user_id = ?
-        ORDER BY debit_date DESC
-        LIMIT 1
-      `).get(seriesId, userId) || root;
+      const latestSql = isPostgres
+        ? 'SELECT * FROM expenses WHERE series_id = $1 AND user_id = $2 ORDER BY debit_date DESC LIMIT 1'
+        : 'SELECT * FROM expenses WHERE series_id = ? AND user_id = ? ORDER BY debit_date DESC LIMIT 1';
+      const latest = await queryOne(latestSql, [seriesId, userId]) || root;
 
       const latestDate = new Date(latest.debit_date);
-      if (latestDate > horizonDate) return;
+      if (latestDate > horizonDate) continue;
 
       const interval = normalizedRecurrenceMonths(latest.recurrence_months);
       let nextDate = new Date(latestDate);
@@ -190,10 +227,10 @@ router.post('/import', authenticateToken, (req, res) => {
           adjustedDate.setDate(adjustedDate.getDate() + 1);
         }
 
-        const existing = db.prepare(`
-          SELECT id FROM expenses 
-          WHERE series_id = ? AND debit_date = ?
-        `).get(seriesId, adjustedDate.toISOString().split('T')[0]);
+        const existingSql = isPostgres
+          ? 'SELECT id FROM expenses WHERE series_id = $1 AND debit_date = $2'
+          : 'SELECT id FROM expenses WHERE series_id = ? AND debit_date = ?';
+        const existing = await queryOne(existingSql, [seriesId, adjustedDate.toISOString().split('T')[0]]);
 
         if (!existing) {
           // Android rules:
@@ -202,12 +239,10 @@ router.post('/import', authenticateToken, (req, res) => {
           // - paid is always set to 0 (not paid) for new occurrences
           const amountCents = latest.fixed_amount ? latest.amount_cents : 0;
 
-          db.prepare(`
-            INSERT INTO expenses (
-              user_id, series_id, description, amount_cents, debit_date,
-              paid, recurring, fixed_amount, original_day, recurrence_months
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
+          const insertSql = isPostgres
+            ? 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)'
+            : 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          await run(insertSql, [
             userId,
             seriesId,
             latest.description,
@@ -218,12 +253,12 @@ router.post('/import', authenticateToken, (req, res) => {
             latest.fixed_amount ? 1 : 0,
             latest.original_day,
             latest.recurrence_months
-          );
+          ]);
         }
 
         nextDate.setMonth(nextDate.getMonth() + interval);
       }
-    });
+    }
 
     res.json({ message: 'Backup imported successfully' });
   } catch (error) {

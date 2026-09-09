@@ -1,22 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, checkDataAccess, requireWriteAccess, requireDeleteAccess } = require('../middleware/auth');
-const { db, financialPeriod, currentFinancialPeriodMonth, adjustedDebitDate, normalizedRecurrenceMonths } = require('../models/database');
+const { db, isPostgres, financialPeriod, currentFinancialPeriodMonth, adjustedDebitDate, normalizedRecurrenceMonths, query, queryOne, run } = require('../models/database');
 
 // Get expenses for a specific month
-router.get('/month/:month', authenticateToken, checkDataAccess, (req, res) => {
+router.get('/month/:month', authenticateToken, checkDataAccess, async (req, res) => {
   try {
     const { month } = req.params;
     const userId = req.dataUserId;
     const period = financialPeriod(month);
 
-    const expenses = db.prepare(`
-      SELECT * FROM expenses 
-      WHERE user_id = ? AND debit_date BETWEEN ? AND ?
-      ORDER BY debit_date, description
-    `).all(userId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]);
-
-    res.json(expenses);
+    const sql = isPostgres
+      ? 'SELECT * FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3 ORDER BY debit_date, description'
+      : 'SELECT * FROM expenses WHERE user_id = ? AND debit_date BETWEEN ? AND ? ORDER BY debit_date, description';
+    const params = [userId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]];
+    
+    const expenses = await query(sql, params);
+    res.json(isPostgres ? expenses.rows : expenses);
   } catch (error) {
     console.error('Get expenses error:', error);
     res.status(500).json({ error: 'Failed to get expenses' });
@@ -24,24 +24,26 @@ router.get('/month/:month', authenticateToken, checkDataAccess, (req, res) => {
 });
 
 // Get recurring expenses
-router.get('/recurring', authenticateToken, checkDataAccess, (req, res) => {
+router.get('/recurring', authenticateToken, checkDataAccess, async (req, res) => {
   try {
     const userId = req.dataUserId;
     const currentMonth = currentFinancialPeriodMonth();
     const period = financialPeriod(currentMonth);
 
     // Get all recurring expenses within the current financial period (21-20)
-    const expenses = db.prepare(`
-      SELECT * FROM expenses
-      WHERE user_id = ? AND recurring = 1 AND debit_date BETWEEN ? AND ?
-      ORDER BY debit_date ASC
-    `).all(userId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]);
+    const sql = isPostgres
+      ? 'SELECT * FROM expenses WHERE user_id = $1 AND recurring = 1 AND debit_date BETWEEN $2 AND $3 ORDER BY debit_date ASC'
+      : 'SELECT * FROM expenses WHERE user_id = ? AND recurring = 1 AND debit_date BETWEEN ? AND ? ORDER BY debit_date ASC';
+    const params = [userId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]];
+    
+    const expenses = await query(sql, params);
+    const expensesArray = isPostgres ? expenses.rows : expenses;
 
     // Group by series and select the most relevant expense
     const groupedExpenses = [];
     const seenSeries = new Set();
 
-    expenses.forEach(expense => {
+    expensesArray.forEach(expense => {
       const seriesId = expense.series_id || expense.id;
       if (!seenSeries.has(seriesId)) {
         seenSeries.add(seriesId);
@@ -67,18 +69,18 @@ router.get('/recurring', authenticateToken, checkDataAccess, (req, res) => {
 });
 
 // Get upcoming expenses
-router.get('/upcoming', authenticateToken, checkDataAccess, (req, res) => {
+router.get('/upcoming', authenticateToken, checkDataAccess, async (req, res) => {
   try {
     const userId = req.dataUserId;
     const today = new Date().toISOString().split('T')[0];
 
-    const expenses = db.prepare(`
-      SELECT * FROM expenses 
-      WHERE user_id = ? AND debit_date >= ?
-      ORDER BY debit_date, description
-    `).all(userId, today);
-
-    res.json(expenses);
+    const sql = isPostgres
+      ? 'SELECT * FROM expenses WHERE user_id = $1 AND debit_date >= $2 ORDER BY debit_date, description'
+      : 'SELECT * FROM expenses WHERE user_id = ? AND debit_date >= ? ORDER BY debit_date, description';
+    const params = [userId, today];
+    
+    const expenses = await query(sql, params);
+    res.json(isPostgres ? expenses.rows : expenses);
   } catch (error) {
     console.error('Get upcoming expenses error:', error);
     res.status(500).json({ error: 'Failed to get upcoming expenses' });
@@ -86,15 +88,17 @@ router.get('/upcoming', authenticateToken, checkDataAccess, (req, res) => {
 });
 
 // Get expense by ID
-router.get('/:id', authenticateToken, (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const expense = db.prepare(`
-      SELECT * FROM expenses 
-      WHERE id = ? AND user_id = ?
-    `).get(id, userId);
+    const sql = isPostgres
+      ? 'SELECT * FROM expenses WHERE id = $1 AND user_id = $2'
+      : 'SELECT * FROM expenses WHERE id = ? AND user_id = ?';
+    const params = [id, userId];
+    
+    const expense = await queryOne(sql, params);
 
     if (!expense) {
       return res.status(404).json({ error: 'Expense not found' });
@@ -108,18 +112,18 @@ router.get('/:id', authenticateToken, (req, res) => {
 });
 
 // Get series expenses
-router.get('/series/:seriesId', authenticateToken, checkDataAccess, (req, res) => {
+router.get('/series/:seriesId', authenticateToken, checkDataAccess, async (req, res) => {
   try {
     const { seriesId } = req.params;
     const userId = req.dataUserId;
 
-    const expenses = db.prepare(`
-      SELECT * FROM expenses 
-      WHERE series_id = ? AND user_id = ?
-      ORDER BY debit_date
-    `).all(seriesId, userId);
-
-    res.json(expenses);
+    const sql = isPostgres
+      ? 'SELECT * FROM expenses WHERE series_id = $1 AND user_id = $2 ORDER BY debit_date'
+      : 'SELECT * FROM expenses WHERE series_id = ? AND user_id = ? ORDER BY debit_date';
+    const params = [seriesId, userId];
+    
+    const expenses = await query(sql, params);
+    res.json(isPostgres ? expenses.rows : expenses);
   } catch (error) {
     console.error('Get series expenses error:', error);
     res.status(500).json({ error: 'Failed to get series expenses' });
@@ -127,7 +131,7 @@ router.get('/series/:seriesId', authenticateToken, checkDataAccess, (req, res) =
 });
 
 // Create expense
-router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, (req, res) => {
+router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (req, res) => {
   try {
     const userId = req.dataUserId;
     const {
@@ -164,12 +168,10 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, (req, r
     const normalizedMonths = normalizedRecurrenceMonths(finalRecurrenceMonths);
     const day = finalOriginalDay || new Date(finalDebitDate).getDate();
 
-    const result = db.prepare(`
-      INSERT INTO expenses (
-        user_id, description, amount_cents, debit_date, paid,
-        recurring, fixed_amount, original_day, recurrence_months
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    const insertSql = isPostgres
+      ? 'INSERT INTO expenses (user_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id'
+      : 'INSERT INTO expenses (user_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+    const insertParams = [
       userId,
       description,
       Math.round(finalAmountCents),
@@ -179,12 +181,17 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, (req, r
       finalFixedAmount ? 1 : 0,
       day,
       normalizedMonths
-    );
+    ];
+    
+    const result = await run(insertSql, insertParams);
+    const expenseId = isPostgres ? result.lastInsertRowid : result.lastInsertRowid;
 
     // If recurring, set series_id and generate future occurrences
     if (recurring) {
-      const expenseId = result.lastInsertRowid;
-      db.prepare('UPDATE expenses SET series_id = id WHERE id = ?').run(expenseId);
+      const updateSeriesSql = isPostgres
+        ? 'UPDATE expenses SET series_id = id WHERE id = $1'
+        : 'UPDATE expenses SET series_id = id WHERE id = ?';
+      await run(updateSeriesSql, [expenseId]);
 
       // Generate future occurrences with Android rules
       const today = new Date();
@@ -203,10 +210,10 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, (req, r
         const monthStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
         const adjustedDate = adjustedDebitDate(monthStr, day);
 
-        const existing = db.prepare(`
-          SELECT id FROM expenses
-          WHERE series_id = ? AND debit_date = ?
-        `).get(expenseId, adjustedDate);
+        const existingSql = isPostgres
+          ? 'SELECT id FROM expenses WHERE series_id = $1 AND debit_date = $2'
+          : 'SELECT id FROM expenses WHERE series_id = ? AND debit_date = ?';
+        const existing = await queryOne(existingSql, [expenseId, adjustedDate]);
 
         if (!existing) {
           // Android rules:
@@ -215,12 +222,10 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, (req, r
           // - paid is always set to 0 (not paid) for new occurrences
           const amountCents = finalFixedAmount ? finalAmountCents : 0;
 
-          db.prepare(`
-            INSERT INTO expenses (
-              user_id, series_id, description, amount_cents, debit_date,
-              paid, recurring, fixed_amount, original_day, recurrence_months
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
+          const occurrenceSql = isPostgres
+            ? 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)'
+            : 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          const occurrenceParams = [
             userId,
             expenseId,
             description,
@@ -231,14 +236,18 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, (req, r
             finalFixedAmount ? 1 : 0,
             day,
             normalizedMonths
-          );
+          ];
+          await run(occurrenceSql, occurrenceParams);
         }
 
         nextDate.setMonth(nextDate.getMonth() + normalizedMonths);
       }
     }
 
-    const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(result.lastInsertRowid);
+    const expense = await queryOne(
+      isPostgres ? 'SELECT * FROM expenses WHERE id = $1' : 'SELECT * FROM expenses WHERE id = ?',
+      [expenseId]
+    );
     res.status(201).json(expense);
   } catch (error) {
     console.error('Create expense error:', error);
@@ -247,7 +256,7 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, (req, r
 });
 
 // Update expense
-router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, (req, res) => {
+router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.dataUserId;
@@ -275,7 +284,10 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, (req,
     const finalRecurrenceMonths = recurrenceMonths !== undefined ? recurrenceMonths : recurrence_months;
 
     // Check if expense belongs to user
-    const existing = db.prepare('SELECT * FROM expenses WHERE id = ? AND user_id = ?').get(id, userId);
+    const existingSql = isPostgres
+      ? 'SELECT * FROM expenses WHERE id = $1 AND user_id = $2'
+      : 'SELECT * FROM expenses WHERE id = ? AND user_id = ?';
+    const existing = await queryOne(existingSql, [id, userId]);
     if (!existing) {
       return res.status(404).json({ error: 'Expense not found' });
     }
@@ -300,19 +312,10 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, (req,
     // If this is a recurring expense, update only this occurrence and future ones
     if (existing.recurring === 1 && existing.series_id) {
       // Update this specific occurrence
-      db.prepare(`
-        UPDATE expenses SET
-          description = ?,
-          amount_cents = ?,
-          debit_date = ?,
-          paid = ?,
-          recurring = ?,
-          fixed_amount = ?,
-          original_day = ?,
-          recurrence_months = ?,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND user_id = ?
-      `).run(
+      const updateSql = isPostgres
+        ? 'UPDATE expenses SET description = $1, amount_cents = $2, debit_date = $3, paid = $4, recurring = $5, fixed_amount = $6, original_day = $7, recurrence_months = $8, updated_at = CURRENT_TIMESTAMP WHERE id = $9 AND user_id = $10'
+        : 'UPDATE expenses SET description = ?, amount_cents = ?, debit_date = ?, paid = ?, recurring = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?';
+      await run(updateSql, [
         description,
         Math.round(finalAmount),
         finalDebitDate,
@@ -323,19 +326,13 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, (req,
         normalizedMonths,
         id,
         userId
-      );
+      ]);
 
       // Update future occurrences (not past ones)
-      db.prepare(`
-        UPDATE expenses SET
-          description = ?,
-          amount_cents = ?,
-          fixed_amount = ?,
-          original_day = ?,
-          recurrence_months = ?,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE series_id = ? AND user_id = ? AND debit_date > ?
-      `).run(
+      const updateFutureSql = isPostgres
+        ? 'UPDATE expenses SET description = $1, amount_cents = $2, fixed_amount = $3, original_day = $4, recurrence_months = $5, updated_at = CURRENT_TIMESTAMP WHERE series_id = $6 AND user_id = $7 AND debit_date > $8'
+        : 'UPDATE expenses SET description = ?, amount_cents = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, updated_at = CURRENT_TIMESTAMP WHERE series_id = ? AND user_id = ? AND debit_date > ?';
+      await run(updateFutureSql, [
         description,
         Math.round(finalAmount),
         finalFixedAmount ? 1 : 0,
@@ -344,22 +341,13 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, (req,
         existing.series_id,
         userId,
         existing.debit_date
-      );
+      ]);
     } else {
       // Non-recurring expense, just update this one
-      db.prepare(`
-        UPDATE expenses SET
-          description = ?,
-          amount_cents = ?,
-          debit_date = ?,
-          paid = ?,
-          recurring = ?,
-          fixed_amount = ?,
-          original_day = ?,
-          recurrence_months = ?,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND user_id = ?
-      `).run(
+      const updateSql = isPostgres
+        ? 'UPDATE expenses SET description = $1, amount_cents = $2, debit_date = $3, paid = $4, recurring = $5, fixed_amount = $6, original_day = $7, recurrence_months = $8, updated_at = CURRENT_TIMESTAMP WHERE id = $9 AND user_id = $10'
+        : 'UPDATE expenses SET description = ?, amount_cents = ?, debit_date = ?, paid = ?, recurring = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?';
+      await run(updateSql, [
         description,
         Math.round(finalAmount),
         finalDebitDate,
@@ -370,10 +358,13 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, (req,
         normalizedMonths,
         id,
         userId
-      );
+      ]);
     }
 
-    const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
+    const expense = await queryOne(
+      isPostgres ? 'SELECT * FROM expenses WHERE id = $1' : 'SELECT * FROM expenses WHERE id = ?',
+      [id]
+    );
     res.json(expense);
   } catch (error) {
     console.error('Update expense error:', error);
@@ -382,16 +373,21 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, (req,
 });
 
 // Update paid status
-router.patch('/:id/paid', authenticateToken, checkDataAccess, requireWriteAccess, (req, res) => {
+router.patch('/:id/paid', authenticateToken, checkDataAccess, requireWriteAccess, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.dataUserId;
     const { paid } = req.body;
 
-    db.prepare('UPDATE expenses SET paid = ? WHERE id = ? AND user_id = ?')
-      .run(paid ? 1 : 0, id, userId);
+    const updateSql = isPostgres
+      ? 'UPDATE expenses SET paid = $1 WHERE id = $2 AND user_id = $3'
+      : 'UPDATE expenses SET paid = ? WHERE id = ? AND user_id = ?';
+    await run(updateSql, [paid ? 1 : 0, id, userId]);
 
-    const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
+    const expense = await queryOne(
+      isPostgres ? 'SELECT * FROM expenses WHERE id = $1' : 'SELECT * FROM expenses WHERE id = ?',
+      [id]
+    );
     res.json(expense);
   } catch (error) {
     console.error('Update paid status error:', error);
@@ -400,50 +396,75 @@ router.patch('/:id/paid', authenticateToken, checkDataAccess, requireWriteAccess
 });
 
 // Delete expense
-router.delete('/:id', authenticateToken, checkDataAccess, requireDeleteAccess, (req, res) => {
+router.delete('/:id', authenticateToken, checkDataAccess, requireDeleteAccess, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.dataUserId;
     const { wholeSeries = false } = req.query;
 
-    const expense = db.prepare('SELECT * FROM expenses WHERE id = ? AND user_id = ?').get(id, userId);
+    const expenseSql = isPostgres
+      ? 'SELECT * FROM expenses WHERE id = $1 AND user_id = $2'
+      : 'SELECT * FROM expenses WHERE id = ? AND user_id = ?';
+    const expense = await queryOne(expenseSql, [id, userId]);
     if (!expense) {
       return res.status(404).json({ error: 'Expense not found' });
     }
 
     if (wholeSeries === 'true' && expense.series_id) {
       // Delete whole series (past and future)
-      db.prepare('UPDATE expenses SET active_series = 0 WHERE series_id = ?').run(expense.series_id);
-      db.prepare('DELETE FROM expenses WHERE series_id = ?').run(expense.series_id);
+      const updateActiveSql = isPostgres
+        ? 'UPDATE expenses SET active_series = 0 WHERE series_id = $1'
+        : 'UPDATE expenses SET active_series = 0 WHERE series_id = ?';
+      await run(updateActiveSql, [expense.series_id]);
+      
+      const deleteSeriesSql = isPostgres
+        ? 'DELETE FROM expenses WHERE series_id = $1'
+        : 'DELETE FROM expenses WHERE series_id = ?';
+      await run(deleteSeriesSql, [expense.series_id]);
     } else if (expense.recurring === 1 && expense.series_id) {
       // Delete this occurrence and future ones only (Android behavior)
       // First, delete this specific occurrence
-      db.prepare('DELETE FROM expenses WHERE id = ? AND user_id = ?').run(id, userId);
+      const deleteSql = isPostgres
+        ? 'DELETE FROM expenses WHERE id = $1 AND user_id = $2'
+        : 'DELETE FROM expenses WHERE id = ? AND user_id = ?';
+      await run(deleteSql, [id, userId]);
 
       // Then delete future occurrences
-      db.prepare('DELETE FROM expenses WHERE series_id = ? AND user_id = ? AND debit_date > ?')
-        .run(expense.series_id, userId, expense.debit_date);
+      const deleteFutureSql = isPostgres
+        ? 'DELETE FROM expenses WHERE series_id = $1 AND user_id = $2 AND debit_date > $3'
+        : 'DELETE FROM expenses WHERE series_id = ? AND user_id = ? AND debit_date > ?';
+      await run(deleteFutureSql, [expense.series_id, userId, expense.debit_date]);
 
       // If this was the root of the series, find a new root or deactivate the series
-      const remaining = db.prepare('SELECT COUNT(*) as count FROM expenses WHERE series_id = ?').get(expense.series_id);
+      const countSql = isPostgres
+        ? 'SELECT COUNT(*) as count FROM expenses WHERE series_id = $1'
+        : 'SELECT COUNT(*) as count FROM expenses WHERE series_id = ?';
+      const remaining = await queryOne(countSql, [expense.series_id]);
       if (remaining.count === 0) {
         // No more occurrences, series is complete
       } else {
         // Check if we deleted the root (id == series_id)
         if (expense.id === expense.series_id) {
           // Find the next occurrence as the new root
-          const nextRoot = db.prepare('SELECT id FROM expenses WHERE series_id = ? ORDER BY debit_date ASC LIMIT 1')
-            .get(expense.series_id);
+          const nextRootSql = isPostgres
+            ? 'SELECT id FROM expenses WHERE series_id = $1 ORDER BY debit_date ASC LIMIT 1'
+            : 'SELECT id FROM expenses WHERE series_id = ? ORDER BY debit_date ASC LIMIT 1';
+          const nextRoot = await queryOne(nextRootSql, [expense.series_id]);
           if (nextRoot) {
             // Update all remaining occurrences to point to the new root
-            db.prepare('UPDATE expenses SET series_id = ? WHERE series_id = ?')
-              .run(nextRoot.id, expense.series_id);
+            const updateRootSql = isPostgres
+              ? 'UPDATE expenses SET series_id = $1 WHERE series_id = $2'
+              : 'UPDATE expenses SET series_id = ? WHERE series_id = ?';
+            await run(updateRootSql, [nextRoot.id, expense.series_id]);
           }
         }
       }
     } else {
       // Delete single non-recurring expense
-      db.prepare('DELETE FROM expenses WHERE id = ? AND user_id = ?').run(id, userId);
+      const deleteSql = isPostgres
+        ? 'DELETE FROM expenses WHERE id = $1 AND user_id = $2'
+        : 'DELETE FROM expenses WHERE id = ? AND user_id = ?';
+      await run(deleteSql, [id, userId]);
     }
 
     res.json({ message: 'Expense deleted successfully' });
@@ -454,7 +475,7 @@ router.delete('/:id', authenticateToken, checkDataAccess, requireDeleteAccess, (
 });
 
 // Ensure future occurrences
-router.post('/ensure-future', authenticateToken, (req, res) => {
+router.post('/ensure-future', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { monthsAhead = 18 } = req.body;
@@ -463,23 +484,22 @@ router.post('/ensure-future', authenticateToken, (req, res) => {
     const horizon = new Date();
     horizon.setMonth(horizon.getMonth() + monthsAhead);
 
-    const recurringExpenses = db.prepare(`
-      SELECT * FROM expenses 
-      WHERE user_id = ? AND recurring = 1 AND active_series = 1 AND id = series_id
-    `).all(userId);
+    const recurringSql = isPostgres
+      ? 'SELECT * FROM expenses WHERE user_id = $1 AND recurring = 1 AND active_series = 1 AND id = series_id'
+      : 'SELECT * FROM expenses WHERE user_id = ? AND recurring = 1 AND active_series = 1 AND id = series_id';
+    const recurringExpensesResult = await query(recurringSql, [userId]);
+    const recurringExpenses = isPostgres ? recurringExpensesResult.rows : recurringExpensesResult;
 
-    recurringExpenses.forEach(root => {
+    for (const root of recurringExpenses) {
       const seriesId = root.series_id || root.id;
 
-      const latest = db.prepare(`
-        SELECT * FROM expenses 
-        WHERE series_id = ? AND user_id = ?
-        ORDER BY debit_date DESC
-        LIMIT 1
-      `).get(seriesId, userId) || root;
+      const latestSql = isPostgres
+        ? 'SELECT * FROM expenses WHERE series_id = $1 AND user_id = $2 ORDER BY debit_date DESC LIMIT 1'
+        : 'SELECT * FROM expenses WHERE series_id = ? AND user_id = ? ORDER BY debit_date DESC LIMIT 1';
+      const latest = await queryOne(latestSql, [seriesId, userId]) || root;
 
       const latestDate = new Date(latest.debit_date);
-      if (latestDate > horizon) return;
+      if (latestDate > horizon) continue;
 
       const interval = normalizedRecurrenceMonths(latest.recurrence_months);
       let nextDate = new Date(latestDate);
@@ -493,10 +513,10 @@ router.post('/ensure-future', authenticateToken, (req, res) => {
         const monthStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
         const adjustedDate = adjustedDebitDate(monthStr, latest.original_day);
 
-        const existing = db.prepare(`
-          SELECT id FROM expenses
-          WHERE series_id = ? AND debit_date = ?
-        `).get(seriesId, adjustedDate);
+        const existingSql = isPostgres
+          ? 'SELECT id FROM expenses WHERE series_id = $1 AND debit_date = $2'
+          : 'SELECT id FROM expenses WHERE series_id = ? AND debit_date = ?';
+        const existing = await queryOne(existingSql, [seriesId, adjustedDate]);
 
         if (!existing) {
           // Android rules:
@@ -505,12 +525,10 @@ router.post('/ensure-future', authenticateToken, (req, res) => {
           // - paid is always set to 0 (not paid) for new occurrences
           const amountCents = latest.fixed_amount ? latest.amount_cents : 0;
 
-          db.prepare(`
-            INSERT INTO expenses (
-              user_id, series_id, description, amount_cents, debit_date,
-              paid, recurring, fixed_amount, original_day, recurrence_months
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
+          const insertSql = isPostgres
+            ? 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)'
+            : 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+          await run(insertSql, [
             userId,
             seriesId,
             latest.description,
@@ -521,12 +539,12 @@ router.post('/ensure-future', authenticateToken, (req, res) => {
             latest.fixed_amount ? 1 : 0,
             latest.original_day,
             latest.recurrence_months
-          );
+          ]);
         }
 
         nextDate.setMonth(nextDate.getMonth() + interval);
       }
-    });
+    }
 
     res.json({ message: 'Future occurrences ensured' });
   } catch (error) {
