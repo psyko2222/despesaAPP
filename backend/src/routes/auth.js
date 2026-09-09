@@ -180,11 +180,15 @@ router.post('/login', async (req, res) => {
       ? (await db.query(userQuery, [email])).rows[0]
       : db.prepare(userQuery).get(email);
     
+    console.log('=== DEBUG: Login attempt for email ===', email);
+    console.log('=== DEBUG: User found ===', user ? { id: user.id, email: user.email, status: user.status, role: user.role } : 'No user found');
+    
     if (!user) {
       return res.status(401).json({ error: 'Email ou password incorrectos' });
     }
 
     if (user.status !== 'approved') {
+      console.log('=== DEBUG: User not approved, status ===', user.status);
       return res.status(403).json({ error: 'A conta está pendente de aprovação' });
     }
 

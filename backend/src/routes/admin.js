@@ -6,6 +6,15 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
 // Get all pending users
 router.get('/users/pending', authenticateToken, requireAdmin, async (req, res) => {
   try {
+    console.log('=== DEBUG: Fetching pending users ===');
+    
+    // First, let's check all users with their status
+    const allUsersSql = 'SELECT id, email, status, role, created_at FROM users ORDER BY created_at DESC';
+    const allUsersResult = await query(allUsersSql, []);
+    const allUsers = isPostgres ? allUsersResult.rows : allUsersResult;
+    console.log('=== DEBUG: All users ===', JSON.stringify(allUsers, null, 2));
+    
+    // Now get pending users
     const pendingUsersSql = `
       SELECT u.id, u.email, u.created_at, u.status, u.role,
              at.token as approval_token, at.expires_at
@@ -16,6 +25,7 @@ router.get('/users/pending', authenticateToken, requireAdmin, async (req, res) =
     `;
     const pendingUsersResult = await query(pendingUsersSql, []);
     const pendingUsers = isPostgres ? pendingUsersResult.rows : pendingUsersResult;
+    console.log('=== DEBUG: Pending users ===', JSON.stringify(pendingUsers, null, 2));
 
     res.json(pendingUsers);
   } catch (error) {
