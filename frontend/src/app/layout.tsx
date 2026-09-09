@@ -32,8 +32,8 @@ export default function RootLayout({
   return (
     <html lang="pt">
       <head>
-        <link rel="icon" href="/icon-192.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/icon-192.svg" />
+        <link rel="icon" href="/icon-192.png" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Despesas" />
