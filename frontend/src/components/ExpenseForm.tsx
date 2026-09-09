@@ -58,8 +58,10 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
         recurring: recurring ? 1 : 0,
         fixed_amount: fixedAmount ? 1 : 0,
         original_day: new Date(debitDate).getDate(),
-        recurrence_months: recurring ? normalizedRecurrenceMonths(recurrenceMonths) : 1,
+        recurrence_months: recurring ? recurrenceMonths : 1,
       };
+
+      console.log('Sending expense data:', expenseData);
 
       if (initialExpense) {
         await expensesAPI.update(initialExpense.id, expenseData, userId);
