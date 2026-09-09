@@ -39,10 +39,25 @@ router.post('/register', async (req, res) => {
     console.log('Counting users...');
     const userCount = await queryOne('SELECT COUNT(*) as count FROM users');
     console.log('User count:', userCount);
+    
+    // Check if there are any approved admins
+    const adminCountQuery = isPostgres
+      ? 'SELECT COUNT(*) as count FROM users WHERE role = $1 AND status = $2'
+      : 'SELECT COUNT(*) as count FROM users WHERE role = ? AND status = ?';
+    const adminCount = isPostgres
+      ? (await db.query(adminCountQuery, ['admin', 'approved'])).rows[0]
+      : db.prepare(adminCountQuery).get('admin', 'approved');
+    
+    console.log('Admin count:', adminCount);
+    
+    // Auto-approve if no admins exist or if it's the first user
     const isFirstUser = userCount.count === 0;
-    const status = isFirstUser ? 'approved' : 'pending';
-    const role = isFirstUser ? 'admin' : 'user';
-    console.log('User will be:', { status, role, isFirstUser });
+    const noAdmins = adminCount.count === 0;
+    const shouldAutoApprove = isFirstUser || noAdmins;
+    
+    const status = shouldAutoApprove ? 'approved' : 'pending';
+    const role = shouldAutoApprove ? 'admin' : 'user';
+    console.log('User will be:', { status, role, isFirstUser, noAdmins, shouldAutoApprove });
     
     console.log('Hashing password...');
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -77,7 +92,7 @@ router.post('/register', async (req, res) => {
       }
 
       let approvalToken = null;
-      if (!isFirstUser) {
+      if (!shouldAutoApprove) {
         console.log('Creating approval token...');
         approvalToken = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -98,7 +113,7 @@ router.post('/register', async (req, res) => {
 
     console.log('Transaction completed, user ID:', created.userId);
 
-    if (!isFirstUser) {
+    if (!shouldAutoApprove) {
       console.log('Getting admins for notification...');
       const adminsQuery = isPostgres
         ? 'SELECT email FROM users WHERE role = $1 AND status = $2'
@@ -134,7 +149,9 @@ router.post('/register', async (req, res) => {
 
     console.log('Returning success response');
     res.status(201).json({
-      message: 'Conta criada com sucesso.',
+      message: shouldAutoApprove && noAdmins 
+        ? 'Conta criada com sucesso. Você é o primeiro admin (sem admins existentes).' 
+        : 'Conta criada com sucesso.',
       requiresApproval: false,
     });
   } catch (error) {
