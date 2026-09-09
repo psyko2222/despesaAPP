@@ -36,31 +36,53 @@ if (!smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
 console.log('✅ Configuração básica está completa.\n');
 
 // Configurar transporter específico para Outlook se necessário
-const isOutlook = smtpConfig.host.includes('outlook.com') || 
+const isOutlook = smtpConfig.host.includes('outlook.com') ||
                  smtpConfig.host.includes('hotmail.com') ||
                  smtpConfig.user.includes('@outlook.com') ||
                  smtpConfig.user.includes('@hotmail.com');
 
-const transporterConfig = isOutlook ? {
-  host: smtpConfig.host,
-  port: Number(smtpConfig.port) || 587,
-  secure: false,
-  tls: {
-    ciphers: 'SSLv3'
-  },
-  auth: {
-    user: smtpConfig.user,
-    pass: smtpConfig.pass
-  }
-} : {
-  host: smtpConfig.host,
-  port: Number(smtpConfig.port) || 587,
-  secure: smtpConfig.secure === 'true' || Number(smtpConfig.port) === 465,
-  auth: {
-    user: smtpConfig.user,
-    pass: smtpConfig.pass
-  }
-};
+// Configurar transporter específico para Gmail se necessário
+const isGmail = smtpConfig.host.includes('gmail.com') ||
+                smtpConfig.user.includes('@gmail.com');
+
+let transporterConfig;
+if (isOutlook) {
+  transporterConfig = {
+    host: smtpConfig.host,
+    port: Number(smtpConfig.port) || 587,
+    secure: false,
+    tls: {
+      ciphers: 'SSLv3'
+    },
+    auth: {
+      user: smtpConfig.user,
+      pass: smtpConfig.pass
+    }
+  };
+} else if (isGmail) {
+  transporterConfig = {
+    host: smtpConfig.host,
+    port: Number(smtpConfig.port) || 587,
+    secure: false,
+    tls: {
+      rejectUnauthorized: false
+    },
+    auth: {
+      user: smtpConfig.user,
+      pass: smtpConfig.pass
+    }
+  };
+} else {
+  transporterConfig = {
+    host: smtpConfig.host,
+    port: Number(smtpConfig.port) || 587,
+    secure: smtpConfig.secure === 'true' || Number(smtpConfig.port) === 465,
+    auth: {
+      user: smtpConfig.user,
+      pass: smtpConfig.pass
+    }
+  };
+}
 
 console.log('Tipo de configuração:', isOutlook ? 'Outlook/Hotmail' : 'SMTP Genérico');
 console.log();

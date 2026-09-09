@@ -10,6 +10,16 @@ const OUTLOOK_SMTP_CONFIG = {
   }
 };
 
+// Configuração específica para Gmail
+const GMAIL_SMTP_CONFIG = {
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
+  tls: {
+    rejectUnauthorized: false
+  }
+};
+
 function isPlaceholder(value) {
   if (!value) return true;
   const v = value.trim().toLowerCase();
@@ -48,11 +58,24 @@ async function sendMail({ to, subject, text, html }) {
       )
     );
 
-    const smtpConfig = isOutlook ? OUTLOOK_SMTP_CONFIG : {
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
-    };
+    // Detetar se é Gmail e usar configuração específica
+    const isGmail = process.env.SMTP_HOST && (
+      process.env.SMTP_HOST.includes('gmail.com') ||
+      process.env.SMTP_USER && process.env.SMTP_USER.includes('@gmail.com')
+    );
+
+    let smtpConfig;
+    if (isOutlook) {
+      smtpConfig = OUTLOOK_SMTP_CONFIG;
+    } else if (isGmail) {
+      smtpConfig = GMAIL_SMTP_CONFIG;
+    } else {
+      smtpConfig = {
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
+      };
+    }
 
     const transporter = nodemailer.createTransport({
       ...smtpConfig,
