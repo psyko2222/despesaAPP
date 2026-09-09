@@ -27,6 +27,8 @@ SMTP_FROM = seuemail@outlook.com
 FRONTEND_URL = https://despesa-app.vercel.app
 ```
 
+**Nota:** Se tiver variáveis `SENDGRID_API_KEY` ou `SENDGRID_FROM_EMAIL` configuradas, pode apagá-las pois não são necessárias ao usar SMTP.
+
 ### 3. Confirmar Alterações
 1. Depois de adicionar todas as variáveis, clique em "Save Changes"
 2. O Render irá automaticamente fazer redeploy do serviço

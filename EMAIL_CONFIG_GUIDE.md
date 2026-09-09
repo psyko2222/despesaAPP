@@ -1,4 +1,4 @@
-# Guia de Configuração de Email - Hotmail/Outlook
+# Guia de Configuração de Email - SMTP (Hotmail/Outlook/Gmail)
 
 ## Passo 1: Criar e Configurar Email Hotmail/Outlook
 
@@ -41,6 +41,8 @@ SMTP_FROM=seuemail@outlook.com
    - `SMTP_FROM`: `seuemail@outlook.com`
 5. Clique em "Save Changes"
 6. O serviço irá fazer redeploy automaticamente
+
+**Nota:** Se tiver variáveis `SENDGRID_API_KEY` ou `SENDGRID_FROM_EMAIL` configuradas, pode apagá-las pois não são necessárias ao usar SMTP.
 
 ## Passo 3: Configurar DNS (Opcional - para email personalizado)
 

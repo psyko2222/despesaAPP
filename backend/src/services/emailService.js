@@ -1,9 +1,4 @@
-const sgMail = require('@sendgrid/mail');
 const nodemailer = require('nodemailer');
-
-if (process.env.SENDGRID_API_KEY && !isPlaceholder(process.env.SENDGRID_API_KEY)) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-}
 
 // Configuração específica para Hotmail/Outlook
 const OUTLOOK_SMTP_CONFIG = {
@@ -23,7 +18,6 @@ function isPlaceholder(value) {
 
 function fromAddress() {
   return (
-    process.env.SENDGRID_FROM_EMAIL ||
     process.env.SMTP_FROM ||
     process.env.EMAIL_FROM ||
     'noreply@despesas.app'
@@ -31,25 +25,19 @@ function fromAddress() {
 }
 
 function isEmailConfigured() {
-  const sendgrid = process.env.SENDGRID_API_KEY && !isPlaceholder(process.env.SENDGRID_API_KEY);
   const smtp = process.env.SMTP_HOST && !isPlaceholder(process.env.SMTP_HOST);
-  return Boolean(sendgrid || smtp);
+  return Boolean(smtp);
 }
 
 async function sendMail({ to, subject, text, html }) {
   if (!isEmailConfigured()) {
-    console.error('Email not sent: configure SENDGRID_API_KEY or SMTP_HOST');
+    console.error('Email not sent: configure SMTP_HOST');
     return { success: false, message: 'Email service not configured' };
   }
 
   const from = fromAddress();
 
   try {
-    if (process.env.SENDGRID_API_KEY && !isPlaceholder(process.env.SENDGRID_API_KEY)) {
-      await sgMail.send({ to, from, subject, text, html });
-      return { success: true };
-    }
-
     // Detetar se é Outlook/Hotmail e usar configuração específica
     const isOutlook = process.env.SMTP_HOST && (
       process.env.SMTP_HOST.includes('outlook.com') ||
