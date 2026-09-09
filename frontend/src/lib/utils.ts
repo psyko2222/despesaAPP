@@ -129,17 +129,19 @@ export function getMonthName(month: string): string {
 // Get financial period display with explicit dates
 export function getFinancialPeriodDisplay(month: string): string {
   const [year, monthNum] = month.split('-').map(Number);
-  const monthName = new Intl.DateTimeFormat('pt-PT', { month: 'long' }).format(new Date(year, monthNum - 1, 1));
   
-  // Calculate start date (21 of previous month)
-  const startDate = new Date(year, monthNum - 2, 21); // monthNum - 2 = previous month
+  // Calculate start date (21 of the month)
+  const startDate = new Date(year, monthNum - 1, 21);
   const startDay = startDate.getDate();
   const startMonthName = new Intl.DateTimeFormat('pt-PT', { month: 'short' }).format(startDate);
   
-  // Calculate end date (20 of current month)
-  const endDate = new Date(year, monthNum - 1, 20);
+  // Calculate end date (20 of NEXT month)
+  const endDate = new Date(year, monthNum, 20); // monthNum = next month
   const endDay = endDate.getDate();
   const endMonthName = new Intl.DateTimeFormat('pt-PT', { month: 'short' }).format(endDate);
+  
+  // Use the end month name for the period name (the month we're looking at)
+  const monthName = new Intl.DateTimeFormat('pt-PT', { month: 'long' }).format(endDate);
   
   return `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year} (${startDay} ${startMonthName} - ${endDay} ${endMonthName})`;
 }
