@@ -5,6 +5,16 @@ if (process.env.SENDGRID_API_KEY && !isPlaceholder(process.env.SENDGRID_API_KEY)
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
+// Configuração específica para Hotmail/Outlook
+const OUTLOOK_SMTP_CONFIG = {
+  host: 'smtp-mail.outlook.com',
+  port: 587,
+  secure: false,
+  tls: {
+    ciphers: 'SSLv3'
+  }
+};
+
 function isPlaceholder(value) {
   if (!value) return true;
   const v = value.trim().toLowerCase();
@@ -40,10 +50,24 @@ async function sendMail({ to, subject, text, html }) {
       return { success: true };
     }
 
-    const transporter = nodemailer.createTransport({
+    // Detetar se é Outlook/Hotmail e usar configuração específica
+    const isOutlook = process.env.SMTP_HOST && (
+      process.env.SMTP_HOST.includes('outlook.com') ||
+      process.env.SMTP_HOST.includes('hotmail.com') ||
+      process.env.SMTP_USER && (
+        process.env.SMTP_USER.includes('@outlook.com') ||
+        process.env.SMTP_USER.includes('@hotmail.com')
+      )
+    );
+
+    const smtpConfig = isOutlook ? OUTLOOK_SMTP_CONFIG : {
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT || 587),
       secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
+    };
+
+    const transporter = nodemailer.createTransport({
+      ...smtpConfig,
       auth:
         process.env.SMTP_USER && process.env.SMTP_PASS
           ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
