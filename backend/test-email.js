@@ -67,7 +67,7 @@ console.log();
 
 // Testar conexão
 console.log('📧 Testando conexão SMTP...');
-const transporter = nodemailer.createTransporter(transporterConfig);
+const transporter = nodemailer.createTransport(transporterConfig);
 
 transporter.verify((error, success) => {
   if (error) {
