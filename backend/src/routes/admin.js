@@ -1,19 +1,22 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../models/database');
+const { db, isPostgres } = require('../models/database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 // Get all pending users
-router.get('/users/pending', authenticateToken, requireAdmin, (req, res) => {
+router.get('/users/pending', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const pendingUsers = db.prepare(`
+    const query = `
       SELECT u.id, u.email, u.created_at, u.status, u.role,
              at.token as approval_token, at.expires_at
       FROM users u
       LEFT JOIN user_approval_tokens at ON u.id = at.user_id AND at.used = 0
       WHERE u.status = 'pending'
       ORDER BY u.created_at DESC
-    `).all();
+    `;
+    const pendingUsers = isPostgres
+      ? (await db.query(query)).rows
+      : db.prepare(query).all();
 
     res.json(pendingUsers);
   } catch (error) {
