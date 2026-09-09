@@ -510,7 +510,9 @@ export default function HomePage() {
         )}
 
         {activeTab === 'shares' && (
-          <SharesScreen />
+          <div className="h-[calc(100vh-12rem)] overflow-y-auto">
+            <SharesScreen />
+          </div>
         )}
 
         {activeTab === 'settings' && (

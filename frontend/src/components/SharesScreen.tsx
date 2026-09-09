@@ -83,6 +83,18 @@ export function SharesScreen() {
     }
   };
 
+  const handleLeave = async (id: number) => {
+    if (!confirm('Tem a certeza que deseja sair desta partilha?')) return;
+
+    try {
+      await sharesAPI.leaveShare(id);
+      alert('Saiu da partilha com sucesso!');
+      loadShares();
+    } catch (error) {
+      alert('Erro ao sair da partilha');
+    }
+  };
+
   const tabs = ['Convites', 'As Minhas Partilhas', 'Partilhas Comigo'];
 
   if (loading) {
@@ -95,14 +107,14 @@ export function SharesScreen() {
   }
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       {/* Tabs */}
-      <div className="flex border-b mb-6">
+      <div className="flex border-b mb-6 overflow-x-auto scrollbar-hide">
         {tabs.map((tab, index) => (
           <button
             key={tab}
             onClick={() => setActiveTab(index)}
-            className={`px-4 py-2 border-b-2 transition-colors ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
               activeTab === index
                 ? 'border-primary-600 text-primary-600'
                 : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -225,6 +237,12 @@ export function SharesScreen() {
                         Permissões: {share.can_read ? 'Ler' : ''} {share.can_write ? 'Escrever' : ''} {share.can_delete ? 'Apagar' : ''}
                       </p>
                     </div>
+                    <Button
+                      variant="danger"
+                      onClick={() => handleLeave(share.id)}
+                    >
+                      Sair
+                    </Button>
                   </div>
                 ))}
               </div>

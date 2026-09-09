@@ -142,6 +142,9 @@ export const sharesAPI = {
   revokeShare: (id: number) =>
     api.delete(`/shares/${id}`),
   
+  leaveShare: (id: number) =>
+    api.delete(`/shares/leave/${id}`),
+  
   updatePermissions: (id: number, permissions: { can_read?: boolean; can_write?: boolean; can_delete?: boolean }) =>
     api.patch(`/shares/${id}`, permissions),
 };

@@ -199,6 +199,35 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Leave share (for shared users)
+router.delete('/leave/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Check if share exists and user is the recipient
+    const shareSql = isPostgres
+      ? 'SELECT * FROM account_shares WHERE id = $1 AND shared_with_id = $2'
+      : 'SELECT * FROM account_shares WHERE id = ? AND shared_with_id = ?';
+    const share = await queryOne(shareSql, [id, userId]);
+
+    if (!share) {
+      return res.status(404).json({ error: 'Share not found' });
+    }
+
+    // Delete the share
+    const deleteSql = isPostgres
+      ? 'DELETE FROM account_shares WHERE id = $1'
+      : 'DELETE FROM account_shares WHERE id = ?';
+    await run(deleteSql, [id]);
+
+    res.json({ message: 'Left share successfully' });
+  } catch (error) {
+    console.error('Leave share error:', error);
+    res.status(500).json({ error: 'Failed to leave share' });
+  }
+});
+
 // Update share permissions
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
