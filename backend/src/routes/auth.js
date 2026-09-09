@@ -166,7 +166,7 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const email = normalizeEmail(req.body.email);
-    const { password } = req.body;
+    const { password, rememberMe } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email e password são obrigatórios' });
@@ -208,7 +208,7 @@ router.post('/login', async (req, res) => {
       db.prepare(updateQuery).run(new Date().toISOString(), user.id);
     }
 
-    const token = generateToken({ id: user.id, email: user.email });
+    const token = generateToken({ id: user.id, email: user.email }, rememberMe);
 
     res.json({
       message: 'Login successful',

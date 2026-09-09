@@ -20,11 +20,12 @@ function authenticateToken(req, res, next) {
   });
 }
 
-function generateToken(user) {
+function generateToken(user, rememberMe = false) {
+  const expiresIn = rememberMe ? '30d' : '7d';
   return jwt.sign(
     { id: user.id, email: user.email },
     JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn }
   );
 }
 

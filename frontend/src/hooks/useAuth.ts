@@ -13,7 +13,7 @@ export function useAuth() {
 
   const checkAuth = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       if (!token) {
         setLoading(false);
         return;
@@ -24,18 +24,22 @@ export function useAuth() {
     } catch (err) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
       setError('Session expired');
     } finally {
       setLoading(false);
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, rememberMe: boolean = false) => {
     try {
       setError(null);
-      const response = await authAPI.login(email, password);
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      const response = await authAPI.login(email, password, rememberMe);
+      
+      const storage = rememberMe ? localStorage : sessionStorage;
+      storage.setItem('token', response.data.token);
+      storage.setItem('user', JSON.stringify(response.data.user));
       setUser(response.data.user);
       return response.data;
     } catch (err: any) {
@@ -58,6 +62,8 @@ export function useAuth() {
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
     setUser(null);
   };
 

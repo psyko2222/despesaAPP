@@ -20,6 +20,7 @@ export default function LoginPage() {
   const [newPassword, setNewPassword] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -47,7 +48,7 @@ export default function LoginPage() {
 
     try {
       if (mode === 'login') {
-        await login(email, password);
+        await login(email, password, rememberMe);
         router.push('/');
       } else if (mode === 'register') {
         if (password !== confirmPassword) {
@@ -153,6 +154,20 @@ export default function LoginPage() {
                     minLength={6}
                   />
                 </div>
+                {mode === 'login' && (
+                  <div className="flex items-center">
+                    <input
+                      id="rememberMe"
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700">
+                      Permanecer logado
+                    </label>
+                  </div>
+                )}
                 {mode === 'register' && (
                   <div>
                     <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">

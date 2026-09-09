@@ -12,7 +12,7 @@ const api = axios.create({
 
 // Add token to requests
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -28,6 +28,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
       }
@@ -40,8 +42,8 @@ export const authAPI = {
   register: (email: string, password: string) =>
     api.post<AuthResponse>('/auth/register', { email, password }),
 
-  login: (email: string, password: string) =>
-    api.post<AuthResponse>('/auth/login', { email, password }),
+  login: (email: string, password: string, rememberMe: boolean = false) =>
+    api.post<AuthResponse>('/auth/login', { email, password, rememberMe }),
 
   me: () => api.get<User>('/auth/me'),
 
