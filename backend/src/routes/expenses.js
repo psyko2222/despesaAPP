@@ -168,6 +168,12 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
     const normalizedMonths = normalizedRecurrenceMonths(finalRecurrenceMonths);
     const day = finalOriginalDay || new Date(finalDebitDate).getDate();
 
+    console.log('Received expense data:', {
+      recurrence_months: finalRecurrenceMonths,
+      normalizedMonths: normalizedMonths,
+      recurring: recurring
+    });
+
     const insertSql = isPostgres
       ? 'INSERT INTO expenses (user_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id'
       : 'INSERT INTO expenses (user_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
@@ -200,23 +206,14 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
 
       let nextDate = new Date(finalDebitDate);
 
-      console.log('Generating recurring expenses:', {
-        startDate: finalDebitDate,
-        recurrenceMonths: normalizedMonths,
-        horizon: horizon.toISOString().split('T')[0]
-      });
-
       // Skip past occurrences, start from current or future
       while (nextDate < today) {
-        console.log('Skipping past date:', nextDate.toISOString().split('T')[0]);
         nextDate.setMonth(nextDate.getMonth() + normalizedMonths);
       }
 
       // Generate future occurrences up to horizon
-      let occurrenceCount = 0;
       while (nextDate <= horizon) {
         const debitDateStr = nextDate.toISOString().split('T')[0];
-        console.log('Generating occurrence for:', debitDateStr);
 
         const existingSql = isPostgres
           ? 'SELECT id FROM expenses WHERE series_id = $1 AND debit_date = $2'
@@ -246,13 +243,10 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
             normalizedMonths
           ];
           await run(occurrenceSql, occurrenceParams);
-          occurrenceCount++;
         }
 
         nextDate.setMonth(nextDate.getMonth() + normalizedMonths);
       }
-
-      console.log('Total occurrences generated:', occurrenceCount);
     }
 
     const expense = await queryOne(
