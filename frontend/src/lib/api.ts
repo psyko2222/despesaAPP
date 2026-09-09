@@ -97,6 +97,9 @@ export const settingsAPI = {
   get: () =>
     api.get<Settings>('/settings'),
   
+  getEmailConfig: () =>
+    api.get<any>('/settings/email-config'),
+  
   update: (settings: Partial<Settings>) =>
     api.put<Settings>('/settings', settings),
   

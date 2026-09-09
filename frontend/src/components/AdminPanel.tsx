@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { logsAPI } from '@/lib/api';
+import { logsAPI, settingsAPI } from '@/lib/api';
 import axios from 'axios';
 
 interface PendingUser {
@@ -38,14 +38,22 @@ interface LogEntry {
   created_at: string;
 }
 
+interface EmailConfig {
+  configured: boolean;
+  sendgrid: boolean;
+  smtp: boolean;
+  frontendUrl: string;
+}
+
 export function AdminPanel() {
   const { user } = useAuth();
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [allUsers, setAllUsers] = useState<AllUser[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [emailConfig, setEmailConfig] = useState<EmailConfig | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'logs'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'logs' | 'config'>('pending');
   const [logFilter, setLogFilter] = useState<'all' | 'error' | 'warning' | 'info'>('all');
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
 
@@ -55,6 +63,9 @@ export function AdminPanel() {
       loadAllUsers();
       if (activeTab === 'logs') {
         loadLogs();
+      }
+      if (activeTab === 'config') {
+        loadEmailConfig();
       }
     }
   }, [user, activeTab, logFilter]);
@@ -100,6 +111,18 @@ export function AdminPanel() {
       setLogs(response.data.logs);
     } catch (error) {
       console.error('Failed to load logs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadEmailConfig = async () => {
+    setLoading(true);
+    try {
+      const response = await settingsAPI.getEmailConfig();
+      setEmailConfig(response.data);
+    } catch (error) {
+      console.error('Failed to load email config:', error);
     } finally {
       setLoading(false);
     }
@@ -273,6 +296,16 @@ export function AdminPanel() {
             }`}
           >
             Logs do Sistema
+          </button>
+          <button
+            onClick={() => setActiveTab('config')}
+            className={`px-4 py-2 border-b-2 transition-colors ${
+              activeTab === 'config'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Configuração Email
           </button>
         </div>
 
@@ -539,6 +572,65 @@ export function AdminPanel() {
                   </div>
                 ))}
               </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'config' && (
+          <>
+            <h3 className="font-semibold mb-4">Configuração de Email</h3>
+
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto"></div>
+              </div>
+            ) : emailConfig ? (
+              <div className="space-y-4">
+                <div className={`p-4 rounded-lg ${emailConfig.configured ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border`}>
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-lg ${emailConfig.configured ? 'text-green-600' : 'text-red-600'}`}>
+                      {emailConfig.configured ? '✓' : '✗'}
+                    </span>
+                    <span className="font-medium">
+                      {emailConfig.configured ? 'Email configurado' : 'Email não configurado'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="text-sm text-gray-600 mb-1">SendGrid</div>
+                    <div className={`font-medium ${emailConfig.sendgrid ? 'text-green-600' : 'text-gray-400'}`}>
+                      {emailConfig.sendgrid ? 'Configurado' : 'Não configurado'}
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="text-sm text-gray-600 mb-1">SMTP</div>
+                    <div className={`font-medium ${emailConfig.smtp ? 'text-green-600' : 'text-gray-400'}`}>
+                      {emailConfig.smtp ? 'Configurado' : 'Não configurado'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <div className="text-sm text-gray-600 mb-1">Frontend URL</div>
+                  <div className="font-medium text-sm">{emailConfig.frontendUrl}</div>
+                </div>
+
+                {!emailConfig.configured && (
+                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <h4 className="font-medium text-yellow-800 mb-2">Como configurar email:</h4>
+                    <ul className="text-sm text-yellow-700 space-y-1 list-disc list-inside">
+                      <li>Configure SENDGRID_API_KEY e SENDGRID_FROM_EMAIL no Render</li>
+                      <li>OU configure SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM</li>
+                      <li>Verifique se FRONTEND_URL está configurado corretamente</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-600 text-center py-4">Não foi possível carregar a configuração</p>
             )}
           </>
         )}
