@@ -110,6 +110,19 @@ async function initializeDatabase() {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS error_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        level TEXT DEFAULT 'error' CHECK(level IN ('error', 'warning', 'info')),
+        message TEXT NOT NULL,
+        details TEXT,
+        user_id INTEGER,
+        route TEXT,
+        method TEXT,
+        ip_address TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_expenses_user_date ON expenses(user_id, debit_date);
       CREATE INDEX IF NOT EXISTS idx_expenses_series ON expenses(series_id);
       CREATE INDEX IF NOT EXISTS idx_expenses_recurring ON expenses(user_id, recurring, active_series);
@@ -119,6 +132,9 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id);
       CREATE INDEX IF NOT EXISTS idx_user_approval_token ON user_approval_tokens(token);
       CREATE INDEX IF NOT EXISTS idx_user_approval_user ON user_approval_tokens(user_id);
+      CREATE INDEX IF NOT EXISTS idx_error_logs_level ON error_logs(level);
+      CREATE INDEX IF NOT EXISTS idx_error_logs_user ON error_logs(user_id);
+      CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at);
     `);
     console.log('SQLite Database initialized successfully');
     return;
@@ -211,6 +227,18 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS error_logs (
+        id SERIAL PRIMARY KEY,
+        level VARCHAR(50) DEFAULT 'error' CHECK(level IN ('error', 'warning', 'info')),
+        message TEXT NOT NULL,
+        details TEXT,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        route VARCHAR(255),
+        method VARCHAR(10),
+        ip_address VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE INDEX IF NOT EXISTS idx_expenses_user_date ON expenses(user_id, debit_date);
       CREATE INDEX IF NOT EXISTS idx_expenses_series ON expenses(series_id);
       CREATE INDEX IF NOT EXISTS idx_expenses_recurring ON expenses(user_id, recurring, active_series);
@@ -220,6 +248,9 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id);
       CREATE INDEX IF NOT EXISTS idx_user_approval_token ON user_approval_tokens(token);
       CREATE INDEX IF NOT EXISTS idx_user_approval_user ON user_approval_tokens(user_id);
+      CREATE INDEX IF NOT EXISTS idx_error_logs_level ON error_logs(level);
+      CREATE INDEX IF NOT EXISTS idx_error_logs_user ON error_logs(user_id);
+      CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at);
     `);
 
     await client.query('COMMIT');

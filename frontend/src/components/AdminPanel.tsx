@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { logsAPI } from '@/lib/api';
 import axios from 'axios';
 
 interface PendingUser {
@@ -25,20 +26,38 @@ interface AllUser {
   last_login?: string;
 }
 
+interface LogEntry {
+  id: number;
+  level: string;
+  message: string;
+  details: string | null;
+  user_id: number | null;
+  route: string | null;
+  method: string | null;
+  ip_address: string | null;
+  created_at: string;
+}
+
 export function AdminPanel() {
   const { user } = useAuth();
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [allUsers, setAllUsers] = useState<AllUser[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'pending' | 'all'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'logs'>('pending');
+  const [logFilter, setLogFilter] = useState<'all' | 'error' | 'warning' | 'info'>('all');
+  const [expandedLog, setExpandedLog] = useState<number | null>(null);
 
   useEffect(() => {
     if (user?.role === 'admin') {
       loadPendingUsers();
       loadAllUsers();
+      if (activeTab === 'logs') {
+        loadLogs();
+      }
     }
-  }, [user]);
+  }, [user, activeTab, logFilter]);
 
   const loadPendingUsers = async () => {
     setLoading(true);
@@ -65,6 +84,22 @@ export function AdminPanel() {
       setAllUsers(response.data);
     } catch (error) {
       console.error('Failed to load all users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadLogs = async () => {
+    setLoading(true);
+    try {
+      const params: any = { limit: 100 };
+      if (logFilter !== 'all') {
+        params.level = logFilter;
+      }
+      const response = await logsAPI.getLogs(params);
+      setLogs(response.data.logs);
+    } catch (error) {
+      console.error('Failed to load logs:', error);
     } finally {
       setLoading(false);
     }
@@ -165,6 +200,32 @@ export function AdminPanel() {
     }
   };
 
+  const handleClearLogs = async () => {
+    if (!confirm('Tem a certeza que deseja limpar os logs antigos (mais de 30 dias)?')) {
+      return;
+    }
+    try {
+      await logsAPI.clearLogs(30);
+      loadLogs();
+    } catch (error) {
+      console.error('Failed to clear logs:', error);
+      alert('Erro ao limpar logs');
+    }
+  };
+
+  const getLevelColor = (level: string) => {
+    switch (level) {
+      case 'error': return 'bg-red-100 text-red-800 border-red-300';
+      case 'warning': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'info': return 'bg-blue-100 text-blue-800 border-blue-300';
+      default: return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('pt-PT');
+  };
+
   if (user?.role !== 'admin') {
     return (
       <Card>
@@ -202,6 +263,16 @@ export function AdminPanel() {
             }`}
           >
             Todos os Utilizadores ({allUsers.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`px-4 py-2 border-b-2 transition-colors ${
+              activeTab === 'logs'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Logs do Sistema
           </button>
         </div>
 
@@ -348,6 +419,123 @@ export function AdminPanel() {
                         </Button>
                       )}
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'logs' && (
+          <>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">Logs do Sistema</h3>
+              <Button onClick={handleClearLogs} variant="destructive" size="sm">
+                Limpar Logs Antigos
+              </Button>
+            </div>
+            <div className="flex gap-2 mb-4">
+              <Button
+                onClick={() => setLogFilter('all')}
+                variant={logFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
+              >
+                Todos
+              </Button>
+              <Button
+                onClick={() => setLogFilter('error')}
+                variant={logFilter === 'error' ? 'default' : 'outline'}
+                size="sm"
+              >
+                Erros
+              </Button>
+              <Button
+                onClick={() => setLogFilter('warning')}
+                variant={logFilter === 'warning' ? 'default' : 'outline'}
+                size="sm"
+              >
+                Avisos
+              </Button>
+              <Button
+                onClick={() => setLogFilter('info')}
+                variant={logFilter === 'info' ? 'default' : 'outline'}
+                size="sm"
+              >
+                Info
+              </Button>
+            </div>
+
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto"></div>
+              </div>
+            ) : logs.length === 0 ? (
+              <p className="text-gray-600 text-center py-4">Nenhum log encontrado com o filtro atual.</p>
+            ) : (
+              <div className="space-y-3">
+                {logs.map((log) => (
+                  <div
+                    key={log.id}
+                    className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                      expandedLog === log.id ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
+                          <span className={`px-2 py-1 rounded text-xs font-medium border ${getLevelColor(log.level)}`}>
+                            {log.level.toUpperCase()}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            {formatDate(log.created_at)}
+                          </span>
+                          {log.route && (
+                            <span className="text-sm text-gray-600">
+                              {log.method} {log.route}
+                            </span>
+                          )}
+                          {log.user_id && (
+                            <span className="text-sm text-gray-600">
+                              User ID: {log.user_id}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-gray-800 font-medium">
+                          {log.message}
+                        </div>
+                      </div>
+                      <div className="ml-4">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedLog(expandedLog === log.id ? null : log.id);
+                          }}
+                        >
+                          {expandedLog === log.id ? '▲' : '▼'}
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {expandedLog === log.id && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        {log.details && (
+                          <div className="mb-3">
+                            <div className="text-sm font-medium text-gray-700 mb-1">Detalhes:</div>
+                            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+                              {typeof log.details === 'string' ? log.details : JSON.stringify(log.details, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                        {log.ip_address && (
+                          <div className="text-sm text-gray-600">
+                            <span className="font-medium">IP:</span> {log.ip_address}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

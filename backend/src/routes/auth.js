@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { db } = require('../models/database');
 const { authenticateToken, generateToken } = require('../middleware/auth');
 const { sendPasswordResetEmail, sendUserApprovalNotification } = require('../services/emailService');
+const { logError } = require('../services/logger');
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
@@ -61,11 +62,18 @@ router.post('/register', async (req, res) => {
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
       if (adminEmails.length > 0 && created.approvalToken) {
-        try {
-          await sendUserApprovalNotification(adminEmails, email, created.approvalToken, frontendUrl);
-        } catch (emailError) {
-          console.error('Failed to send approval notification:', emailError);
-        }
+        // Send email notification in background - don't block registration
+        sendUserApprovalNotification(adminEmails, email, created.approvalToken, frontendUrl)
+          .catch((emailError) => {
+            console.error('Failed to send approval notification:', emailError);
+            logError({
+              level: 'warning',
+              message: 'Failed to send user approval notification',
+              details: { error: emailError.message, newUserEmail: email, adminEmails },
+              route: '/auth/register',
+              method: 'POST'
+            });
+          });
       }
 
       return res.status(201).json({
@@ -200,14 +208,33 @@ router.post('/forgot-password', async (req, res) => {
     ).run(user.id, resetToken, expiresAt);
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const emailResult = await sendPasswordResetEmail(user.email, resetToken, frontendUrl);
-
-    if (!emailResult.success) {
-      console.error('Password reset email was not sent:', emailResult.message);
-      return res.status(503).json({
-        error: 'Não foi possível enviar o email de recuperação. Tente mais tarde ou contacte o administrador.',
+    
+    // Send email in background - don't block the response
+    sendPasswordResetEmail(user.email, resetToken, frontendUrl)
+      .then((emailResult) => {
+        if (!emailResult.success) {
+          console.error('Password reset email was not sent:', emailResult.message);
+          logError({
+            level: 'warning',
+            message: 'Password reset email was not sent',
+            details: { result: emailResult },
+            userId: user.id,
+            route: '/auth/forgot-password',
+            method: 'POST'
+          });
+        }
+      })
+      .catch((emailError) => {
+        console.error('Failed to send password reset email:', emailError);
+        logError({
+          level: 'error',
+          message: 'Failed to send password reset email',
+          details: { error: emailError.message },
+          userId: user.id,
+          route: '/auth/forgot-password',
+          method: 'POST'
+        });
       });
-    }
 
     res.json({ message: genericMessage, emailSent: true });
   } catch (error) {

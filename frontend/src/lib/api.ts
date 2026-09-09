@@ -133,4 +133,12 @@ export const sharesAPI = {
     api.patch(`/shares/${id}`, permissions),
 };
 
+export const logsAPI = {
+  getLogs: (params?: { limit?: number; offset?: number; level?: string; userId?: number }) =>
+    api.get<any>('/logs', { params }),
+  
+  clearLogs: (olderThanDays?: number) =>
+    api.delete<any>(`/logs/clear${olderThanDays ? `?olderThanDays=${olderThanDays}` : ''}`),
+};
+
 export default api;

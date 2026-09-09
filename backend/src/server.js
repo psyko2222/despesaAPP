@@ -46,6 +46,7 @@ app.use('/api/settings', require('./routes/settings'));
 app.use('/api/backup', require('./routes/backup'));
 app.use('/api/shares', require('./routes/shares'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/logs', require('./routes/logs'));
 
 // Health check
 app.get('/api/health', (req, res) => {
