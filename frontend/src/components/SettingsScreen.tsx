@@ -190,14 +190,14 @@ export function SettingsScreen() {
   const tabs = ['Notificações', 'Aplicação', 'Dados', 'Segurança', 'Limpeza'];
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       {/* Tabs */}
-      <div className="flex border-b mb-6">
+      <div className="flex border-b mb-6 overflow-x-auto scrollbar-hide">
         {tabs.map((tab, index) => (
           <button
             key={tab}
             onClick={() => setActiveTab(index)}
-            className={`px-4 py-2 border-b-2 transition-colors ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
               activeTab === index
                 ? 'border-primary-600 text-primary-600'
                 : 'border-transparent text-gray-600 hover:text-gray-900'

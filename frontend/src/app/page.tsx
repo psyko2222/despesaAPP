@@ -178,6 +178,7 @@ export default function HomePage() {
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 sm:py-4 flex justify-between items-center">
           <div className="flex items-center space-x-2 sm:space-x-4">
+            <img src="/icon-192.png" alt="Despesas" className="w-8 h-8 sm:w-10 sm:h-10" />
             <h1 className="text-xl sm:text-2xl font-bold text-primary-600">Despesas</h1>
             {sharedAccounts.length > 0 && (
               <select
@@ -513,7 +514,9 @@ export default function HomePage() {
         )}
 
         {activeTab === 'settings' && (
-          <SettingsScreen />
+          <div className="h-[calc(100vh-12rem)] overflow-y-auto">
+            <SettingsScreen />
+          </div>
         )}
 
         {activeTab === 'admin' && (
