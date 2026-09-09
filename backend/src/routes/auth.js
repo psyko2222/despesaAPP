@@ -14,38 +14,55 @@ function normalizeEmail(email) {
 // Register
 router.post('/register', async (req, res) => {
   try {
+    console.log('Registration attempt started');
     const email = normalizeEmail(req.body.email);
     const { password } = req.body;
+    console.log('Email:', email);
 
     if (!email || !password) {
+      console.log('Missing email or password');
       return res.status(400).json({ error: 'Email e password são obrigatórios' });
     }
 
     if (password.length < 6) {
+      console.log('Password too short');
       return res.status(400).json({ error: 'A password deve ter pelo menos 6 caracteres' });
     }
 
+    console.log('Checking for existing user...');
     const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
     if (existingUser) {
+      console.log('User already exists:', existingUser);
       return res.status(409).json({ error: 'Já existe uma conta com este email' });
     }
 
+    console.log('Counting users...');
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+    console.log('User count:', userCount);
     const isFirstUser = userCount.count === 0;
     const status = isFirstUser ? 'approved' : 'pending';
     const role = isFirstUser ? 'admin' : 'user';
+    console.log('User will be:', { status, role, isFirstUser });
+    
+    console.log('Hashing password...');
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    console.log('Starting transaction...');
     const created = db.transaction(() => {
+      console.log('Inserting user...');
       const result = db.prepare(
         'INSERT INTO users (email, password, status, role) VALUES (?, ?, ?, ?)'
       ).run(email, hashedPassword, status, role);
 
+      console.log('User inserted, ID:', result.lastInsertRowid);
       const userId = result.lastInsertRowid;
+      
+      console.log('Inserting settings...');
       db.prepare('INSERT INTO settings (user_id) VALUES (?)').run(userId);
 
       let approvalToken = null;
       if (!isFirstUser) {
+        console.log('Creating approval token...');
         approvalToken = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
         db.prepare(
@@ -56,10 +73,14 @@ router.post('/register', async (req, res) => {
       return { userId, approvalToken };
     })();
 
+    console.log('Transaction completed, user ID:', created.userId);
+
     if (!isFirstUser) {
+      console.log('Getting admins for notification...');
       const admins = db.prepare('SELECT email FROM users WHERE role = ? AND status = ?').all('admin', 'approved');
       const adminEmails = admins.map((a) => a.email);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      console.log('Admins found:', adminEmails);
 
       if (adminEmails.length > 0 && created.approvalToken) {
         // Send email notification in background - don't block registration
@@ -76,18 +97,28 @@ router.post('/register', async (req, res) => {
           });
       }
 
+      console.log('Returning pending approval response');
       return res.status(201).json({
         message: 'Conta criada. Fica pendente de aprovação.',
         requiresApproval: true,
       });
     }
 
+    console.log('Returning success response');
     res.status(201).json({
       message: 'Conta criada com sucesso.',
       requiresApproval: false,
     });
   } catch (error) {
     console.error('Registration error:', error);
+    console.error('Error stack:', error.stack);
+    logError({
+      level: 'error',
+      message: 'Registration failed',
+      details: { error: error.message, stack: error.stack },
+      route: '/auth/register',
+      method: 'POST'
+    });
     res.status(500).json({ error: 'Não foi possível criar a conta' });
   }
 });
