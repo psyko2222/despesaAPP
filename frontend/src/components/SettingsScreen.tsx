@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { settingsAPI, backupAPI } from '@/lib/api';
+import { settingsAPI, backupAPI, authAPI } from '@/lib/api';
 import { Settings } from '@/types';
 import axios from 'axios';
 
@@ -19,6 +19,12 @@ export function SettingsScreen() {
   const [cleanupStats, setCleanupStats] = useState<any>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupDeleting, setCleanupDeleting] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -138,6 +144,40 @@ export function SettingsScreen() {
     }
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('Todos os campos são obrigatórios');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('A nova password deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('As passwords não coincidem');
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await authAPI.changePassword(currentPassword, newPassword);
+      setPasswordSuccess('Password alterada com sucesso!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      setPasswordError(err.response?.data?.error || 'Não foi possível alterar a password');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   if (loading || !settings) {
     return (
       <div className="text-center py-8">
@@ -147,7 +187,7 @@ export function SettingsScreen() {
     );
   }
 
-  const tabs = ['Notificações', 'Aplicação', 'Dados', 'Limpeza'];
+  const tabs = ['Notificações', 'Aplicação', 'Dados', 'Segurança', 'Limpeza'];
 
   return (
     <div>
@@ -302,6 +342,76 @@ export function SettingsScreen() {
       )}
 
       {activeTab === 3 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Segurança</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div>
+                <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Password Atual
+                </label>
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Nova Password
+                </label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirmar Nova Password
+                </label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                />
+              </div>
+              {passwordError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                  {passwordError}
+                </div>
+              )}
+              {passwordSuccess && (
+                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
+                  {passwordSuccess}
+                </div>
+              )}
+              <Button
+                type="submit"
+                disabled={changingPassword}
+                className="w-full"
+              >
+                {changingPassword ? 'A alterar...' : 'Alterar Password'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 4 && (
         <Card>
           <CardHeader>
             <CardTitle>Limpeza de Registos Antigos</CardTitle>

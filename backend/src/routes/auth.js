@@ -433,4 +433,55 @@ router.post('/reset-password/:token', async (req, res) => {
   }
 });
 
+// Change password (authenticated)
+router.post('/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Password atual e nova password são obrigatórias' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'A nova password deve ter pelo menos 6 caracteres' });
+    }
+
+    // Get user with password
+    const userQuery = isPostgres
+      ? 'SELECT * FROM users WHERE id = $1'
+      : 'SELECT * FROM users WHERE id = ?';
+    const user = isPostgres
+      ? (await db.query(userQuery, [req.user.id])).rows[0]
+      : db.prepare(userQuery).get(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'Utilizador não encontrado' });
+    }
+
+    // Verify current password
+    const validPassword = await bcrypt.compare(currentPassword, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Password atual incorrecta' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user password
+    const updateQuery = isPostgres
+      ? 'UPDATE users SET password = $1 WHERE id = $2'
+      : 'UPDATE users SET password = ? WHERE id = ?';
+    if (isPostgres) {
+      await db.query(updateQuery, [hashedPassword, req.user.id]);
+    } else {
+      db.prepare(updateQuery).run(hashedPassword, req.user.id);
+    }
+
+    res.json({ message: 'Password alterada com sucesso' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Não foi possível alterar a password' });
+  }
+});
+
 module.exports = router;

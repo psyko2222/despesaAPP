@@ -39,10 +39,10 @@ api.interceptors.response.use(
 export const authAPI = {
   register: (email: string, password: string) =>
     api.post<AuthResponse>('/auth/register', { email, password }),
-  
+
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/auth/login', { email, password }),
-  
+
   me: () => api.get<User>('/auth/me'),
 
   forgotPassword: (email: string) =>
@@ -53,6 +53,9 @@ export const authAPI = {
 
   approveByToken: (token: string) =>
     api.post<{ message: string }>(`/auth/approve/${token}`),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post<{ message: string }>('/auth/change-password', { currentPassword, newPassword }),
 };
 
 export const expensesAPI = {

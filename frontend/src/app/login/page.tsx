@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [error, setError] = useState('');
@@ -53,6 +54,11 @@ export default function LoginPage() {
         await login(email, password);
         router.push('/');
       } else if (mode === 'register') {
+        if (password !== confirmPassword) {
+          setError('As passwords não coincidem');
+          setLoading(false);
+          return;
+        }
         const result = await register(email, password);
         if (result.requiresApproval) {
           setSuccess('Conta criada. Fica pendente de aprovação. Depois disso pode entrar.');
@@ -60,6 +66,7 @@ export default function LoginPage() {
           setSuccess('Conta criada. Pode agora entrar.');
         }
         setPassword('');
+        setConfirmPassword('');
         setMode('login');
       } else if (mode === 'forgot') {
         const response = await authAPI.forgotPassword(email);
@@ -110,20 +117,38 @@ export default function LoginPage() {
               />
             </div>
             {mode !== 'forgot' && mode !== 'reset' && (
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
-                </label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  minLength={6}
-                />
-              </div>
+              <>
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                  />
+                </div>
+                {mode === 'register' && (
+                  <div>
+                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                      Confirmar Password
+                    </label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                )}
+              </>
             )}
             {mode === 'reset' && (
               <>
@@ -212,6 +237,8 @@ export default function LoginPage() {
                   setMode('login');
                   setError('');
                   setSuccess('');
+                  setPassword('');
+                  setConfirmPassword('');
                 }}
                 className="text-primary-600 hover:text-primary-700 text-sm"
               >
