@@ -93,6 +93,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
+          <div className="flex justify-center mb-4">
+            <img src="/icon-192.png" alt="Despesas" className="w-16 h-16 rounded-lg" />
+          </div>
           <CardTitle className="text-3xl text-center text-primary-600">
             {mode === 'login' ? 'Entrar' :
              mode === 'register' ? 'Registar' :
