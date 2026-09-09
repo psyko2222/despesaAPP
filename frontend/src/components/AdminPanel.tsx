@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { logsAPI, settingsAPI } from '@/lib/api';
+import api from '@/lib/api';
 
 interface PendingUser {
   id: number;
@@ -72,10 +73,7 @@ export function AdminPanel() {
   const loadPendingUsers = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/api/admin/users/pending', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/admin/users/pending');
       setPendingUsers(response.data);
     } catch (error) {
       console.error('Failed to load pending users:', error);
@@ -87,10 +85,7 @@ export function AdminPanel() {
   const loadAllUsers = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/api/admin/users', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/admin/users');
       setAllUsers(response.data);
     } catch (error) {
       console.error('Failed to load all users:', error);
@@ -130,10 +125,7 @@ export function AdminPanel() {
   const handleApprove = async (userId: number) => {
     setActionLoading(userId);
     try {
-      const token = localStorage.getItem('token');
-      await axios.post(`/api/admin/users/${userId}/approve`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post(`/admin/users/${userId}/approve`, {});
       alert('Utilizador aprovado com sucesso!');
       loadPendingUsers();
       loadAllUsers();
@@ -150,10 +142,7 @@ export function AdminPanel() {
 
     setActionLoading(userId);
     try {
-      const token = localStorage.getItem('token');
-      await axios.post(`/api/admin/users/${userId}/reject`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post(`/admin/users/${userId}/reject`, {});
       alert('Utilizador rejeitado com sucesso!');
       loadPendingUsers();
       loadAllUsers();
@@ -170,10 +159,7 @@ export function AdminPanel() {
 
     setActionLoading(userId);
     try {
-      const token = localStorage.getItem('token');
-      await axios.post(`/api/admin/users/${userId}/promote`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post(`/admin/users/${userId}/promote`, {});
       alert('Utilizador promovido a admin com sucesso!');
       loadAllUsers();
     } catch (error) {
@@ -189,10 +175,7 @@ export function AdminPanel() {
 
     setActionLoading(userId);
     try {
-      const token = localStorage.getItem('token');
-      await axios.post(`/api/admin/users/${userId}/demote`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post(`/admin/users/${userId}/demote`, {});
       alert('Utilizador despromovido com sucesso!');
       loadAllUsers();
     } catch (error) {
@@ -208,10 +191,7 @@ export function AdminPanel() {
 
     setActionLoading(userId);
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`/api/admin/users/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete(`/admin/users/${userId}`);
       alert('Utilizador apagado com sucesso!');
       loadAllUsers();
     } catch (error) {

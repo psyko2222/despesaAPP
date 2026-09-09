@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { db, isPostgres, queryOne, run, transaction } = require('../models/database');
+const { db, isPostgres, query, queryOne, run, transaction } = require('../models/database');
 const { authenticateToken, generateToken } = require('../middleware/auth');
 const { sendPasswordResetEmail, sendUserApprovalNotification, isEmailConfigured } = require('../services/emailService');
 const { logError } = require('../services/logger');
@@ -103,9 +103,8 @@ router.post('/register', async (req, res) => {
       const adminsQuery = isPostgres
         ? 'SELECT email FROM users WHERE role = $1 AND status = $2'
         : 'SELECT email FROM users WHERE role = ? AND status = ?';
-      const admins = isPostgres 
-        ? (await db.query(adminsQuery, ['admin', 'approved'])).rows
-        : db.prepare(adminsQuery).all('admin', 'approved');
+      const adminsResult = await query(adminsQuery, ['admin', 'approved']);
+      const admins = isPostgres ? adminsResult.rows : adminsResult;
       const adminEmails = admins.map((a) => a.email);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       console.log('Admins found:', adminEmails);
