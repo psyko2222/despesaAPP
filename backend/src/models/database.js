@@ -7,6 +7,8 @@ let isPostgres = false;
 
 if (process.env.DATABASE_URL) {
   isPostgres = true;
+  console.log('Using PostgreSQL database');
+  console.log('DATABASE_URL is set:', process.env.DATABASE_URL ? 'Yes' : 'No');
   db = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
@@ -14,7 +16,9 @@ if (process.env.DATABASE_URL) {
     }
   });
 } else {
+  console.log('Using SQLite database');
   const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../../despesas.db');
+  console.log('Database path:', dbPath);
   db = new Database(dbPath);
   db.pragma('foreign_keys = ON');
 }
@@ -141,9 +145,11 @@ async function initializeDatabase() {
   }
 
   // Inicialização para PostgreSQL
+  console.log('Connecting to PostgreSQL...');
   const client = await db.connect();
   try {
     await client.query('BEGIN');
+    console.log('PostgreSQL transaction started');
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (

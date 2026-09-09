@@ -8,7 +8,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Initialize database
-initializeDatabase();
+console.log('Initializing database...');
+initializeDatabase().then(() => {
+  console.log('Database initialization completed');
+}).catch((error) => {
+  console.error('Database initialization failed:', error);
+});
 
 // Configuração robusta de CORS
 const allowedOrigins = [
