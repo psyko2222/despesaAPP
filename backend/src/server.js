@@ -7,14 +7,6 @@ const { initializeDatabase } = require('./models/database');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize database
-console.log('Initializing database...');
-initializeDatabase().then(() => {
-  console.log('Database initialization completed');
-}).catch((error) => {
-  console.error('Database initialization failed:', error);
-});
-
 // Configuração robusta de CORS
 const allowedOrigins = [
   'https://despesa-app.vercel.app',
@@ -69,10 +61,24 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Initialize database and then start server
+async function startServer() {
+  try {
+    console.log('Initializing database...');
+    await initializeDatabase();
+    console.log('Database initialization completed');
+    
+    // Start server after database is ready
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 module.exports = app;
