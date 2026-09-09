@@ -202,7 +202,23 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
 
       // Skip past occurrences, start from current or future
       while (nextDate < today) {
-        nextDate.setMonth(nextDate.getMonth() + normalizedMonths);
+        // More robust date increment that handles month boundaries correctly
+        const currentYear = nextDate.getFullYear();
+        const currentMonth = nextDate.getMonth();
+        const currentDay = nextDate.getDate();
+        
+        // Calculate new month and year with proper overflow handling
+        const newTotalMonths = currentYear * 12 + currentMonth + normalizedMonths;
+        const newYear = Math.floor(newTotalMonths / 12);
+        const newMonth = newTotalMonths % 12;
+        
+        // Set to first day of new month to avoid overflow issues
+        nextDate = new Date(newYear, newMonth, 1);
+        
+        // Then set the day, handling cases where the day doesn't exist in the target month
+        const lastDayOfMonth = new Date(newYear, newMonth + 1, 0).getDate();
+        const targetDay = Math.min(day, lastDayOfMonth);
+        nextDate.setDate(targetDay);
       }
 
       // Generate future occurrences up to horizon
@@ -247,7 +263,22 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
           await run(occurrenceSql, occurrenceParams);
         }
 
-        nextDate.setMonth(nextDate.getMonth() + normalizedMonths);
+        // More robust date increment for the next occurrence
+        const currentYear = nextDate.getFullYear();
+        const currentMonth = nextDate.getMonth();
+        
+        // Calculate new month and year with proper overflow handling
+        const newTotalMonths = currentYear * 12 + currentMonth + normalizedMonths;
+        const newYear = Math.floor(newTotalMonths / 12);
+        const newMonth = newTotalMonths % 12;
+        
+        // Set to first day of new month to avoid overflow issues
+        nextDate = new Date(newYear, newMonth, 1);
+        
+        // Then set the day, handling cases where the day doesn't exist in the target month
+        const nextLastDay = new Date(newYear, newMonth + 1, 0).getDate();
+        const nextTargetDay = Math.min(day, nextLastDay);
+        nextDate.setDate(nextTargetDay);
       }
     }
 
@@ -513,7 +544,22 @@ router.post('/ensure-future', authenticateToken, async (req, res) => {
 
       // Skip past occurrences, start from current or future
       while (nextDate < today) {
-        nextDate.setMonth(nextDate.getMonth() + interval);
+        // More robust date increment that handles month boundaries correctly
+        const currentYear = nextDate.getFullYear();
+        const currentMonth = nextDate.getMonth();
+        
+        // Calculate new month and year with proper overflow handling
+        const newTotalMonths = currentYear * 12 + currentMonth + interval;
+        const newYear = Math.floor(newTotalMonths / 12);
+        const newMonth = newTotalMonths % 12;
+        
+        // Set to first day of new month to avoid overflow issues
+        nextDate = new Date(newYear, newMonth, 1);
+        
+        // Then set the day, handling cases where the day doesn't exist in the target month
+        const lastDayOfMonth = new Date(newYear, newMonth + 1, 0).getDate();
+        const targetDay = Math.min(latest.original_day, lastDayOfMonth);
+        nextDate.setDate(targetDay);
       }
 
       while (nextDate <= horizon) {
@@ -556,7 +602,22 @@ router.post('/ensure-future', authenticateToken, async (req, res) => {
           ]);
         }
 
-        nextDate.setMonth(nextDate.getMonth() + interval);
+        // More robust date increment for the next occurrence
+        const currentYear = nextDate.getFullYear();
+        const currentMonth = nextDate.getMonth();
+        
+        // Calculate new month and year with proper overflow handling
+        const newTotalMonths = currentYear * 12 + currentMonth + interval;
+        const newYear = Math.floor(newTotalMonths / 12);
+        const newMonth = newTotalMonths % 12;
+        
+        // Set to first day of new month to avoid overflow issues
+        nextDate = new Date(newYear, newMonth, 1);
+        
+        // Then set the day, handling cases where the day doesn't exist in the target month
+        const nextLastDay = new Date(newYear, newMonth + 1, 0).getDate();
+        const nextTargetDay = Math.min(latest.original_day, nextLastDay);
+        nextDate.setDate(nextTargetDay);
       }
     }
 
