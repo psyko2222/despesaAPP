@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { db } = require('../models/database');
+const { db, isPostgres, queryOne, run, transaction } = require('../models/database');
 const { authenticateToken, generateToken } = require('../middleware/auth');
 const { sendPasswordResetEmail, sendUserApprovalNotification } = require('../services/emailService');
 const { logError } = require('../services/logger');
@@ -30,14 +30,14 @@ router.post('/register', async (req, res) => {
     }
 
     console.log('Checking for existing user...');
-    const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const existingUser = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
     if (existingUser) {
       console.log('User already exists:', existingUser);
       return res.status(409).json({ error: 'Já existe uma conta com este email' });
     }
 
     console.log('Counting users...');
-    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+    const userCount = await queryOne('SELECT COUNT(*) as count FROM users');
     console.log('User count:', userCount);
     const isFirstUser = userCount.count === 0;
     const status = isFirstUser ? 'approved' : 'pending';
@@ -48,36 +48,64 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     console.log('Starting transaction...');
-    const created = db.transaction(() => {
+    const created = await transaction(async (client) => {
       console.log('Inserting user...');
-      const result = db.prepare(
-        'INSERT INTO users (email, password, status, role) VALUES (?, ?, ?, ?)'
-      ).run(email, hashedPassword, status, role);
+      const insertQuery = isPostgres 
+        ? 'INSERT INTO users (email, password, status, role) VALUES ($1, $2, $3, $4) RETURNING id'
+        : 'INSERT INTO users (email, password, status, role) VALUES (?, ?, ?, ?)';
+      
+      let userId;
+      if (isPostgres) {
+        const result = await client.query(insertQuery, [email, hashedPassword, status, role]);
+        userId = result.rows[0].id;
+      } else {
+        const result = await run(insertQuery, [email, hashedPassword, status, role]);
+        userId = result.lastInsertRowid;
+      }
 
-      console.log('User inserted, ID:', result.lastInsertRowid);
-      const userId = result.lastInsertRowid;
+      console.log('User inserted, ID:', userId);
       
       console.log('Inserting settings...');
-      db.prepare('INSERT INTO settings (user_id) VALUES (?)').run(userId);
+      const settingsQuery = isPostgres
+        ? 'INSERT INTO settings (user_id) VALUES ($1)'
+        : 'INSERT INTO settings (user_id) VALUES (?)';
+      
+      if (isPostgres) {
+        await client.query(settingsQuery, [userId]);
+      } else {
+        await run(settingsQuery, [userId]);
+      }
 
       let approvalToken = null;
       if (!isFirstUser) {
         console.log('Creating approval token...');
         approvalToken = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-        db.prepare(
-          'INSERT INTO user_approval_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
-        ).run(userId, approvalToken, expiresAt);
+        
+        const tokenQuery = isPostgres
+          ? 'INSERT INTO user_approval_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)'
+          : 'INSERT INTO user_approval_tokens (user_id, token, expires_at) VALUES (?, ?, ?)';
+        
+        if (isPostgres) {
+          await client.query(tokenQuery, [userId, approvalToken, expiresAt]);
+        } else {
+          await run(tokenQuery, [userId, approvalToken, expiresAt]);
+        }
       }
 
       return { userId, approvalToken };
-    })();
+    });
 
     console.log('Transaction completed, user ID:', created.userId);
 
     if (!isFirstUser) {
       console.log('Getting admins for notification...');
-      const admins = db.prepare('SELECT email FROM users WHERE role = ? AND status = ?').all('admin', 'approved');
+      const adminsQuery = isPostgres
+        ? 'SELECT email FROM users WHERE role = $1 AND status = $2'
+        : 'SELECT email FROM users WHERE role = ? AND status = ?';
+      const admins = isPostgres 
+        ? (await db.query(adminsQuery, ['admin', 'approved'])).rows
+        : db.prepare(adminsQuery).all('admin', 'approved');
       const adminEmails = admins.map((a) => a.email);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       console.log('Admins found:', adminEmails);
@@ -133,7 +161,13 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email e password são obrigatórios' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const userQuery = isPostgres
+      ? 'SELECT * FROM users WHERE email = $1'
+      : 'SELECT * FROM users WHERE email = ?';
+    const user = isPostgres
+      ? (await db.query(userQuery, [email])).rows[0]
+      : db.prepare(userQuery).get(email);
+    
     if (!user) {
       return res.status(401).json({ error: 'Email ou password incorrectos' });
     }
@@ -149,8 +183,15 @@ router.post('/login', async (req, res) => {
     }
 
     // Update last login
-    db.prepare('UPDATE users SET last_login = ? WHERE id = ?')
-      .run(new Date().toISOString(), user.id);
+    const updateQuery = isPostgres
+      ? 'UPDATE users SET last_login = $1 WHERE id = $2'
+      : 'UPDATE users SET last_login = ? WHERE id = ?';
+    
+    if (isPostgres) {
+      await db.query(updateQuery, [new Date().toISOString(), user.id]);
+    } else {
+      db.prepare(updateQuery).run(new Date().toISOString(), user.id);
+    }
 
     const token = generateToken({ id: user.id, email: user.email });
 
@@ -166,10 +207,14 @@ router.post('/login', async (req, res) => {
 });
 
 // Get current user
-router.get('/me', authenticateToken, (req, res) => {
+router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = db.prepare('SELECT id, email, created_at, last_login, role, status FROM users WHERE id = ?')
-      .get(req.user.id);
+    const userQuery = isPostgres
+      ? 'SELECT id, email, created_at, last_login, role, status FROM users WHERE id = $1'
+      : 'SELECT id, email, created_at, last_login, role, status FROM users WHERE id = ?';
+    const user = isPostgres
+      ? (await db.query(userQuery, [req.user.id])).rows[0]
+      : db.prepare(userQuery).get(req.user.id);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -183,27 +228,49 @@ router.get('/me', authenticateToken, (req, res) => {
 });
 
 // Approve user via token (for admin approval via email link)
-router.post('/approve/:token', (req, res) => {
+router.post('/approve/:token', async (req, res) => {
   try {
     const { token } = req.params;
 
     // Find valid approval token
-    const approvalToken = db.prepare(
-      'SELECT * FROM user_approval_tokens WHERE token = ? AND used = 0 AND expires_at > ?'
-    ).get(token, new Date().toISOString());
+    const tokenQuery = isPostgres
+      ? 'SELECT * FROM user_approval_tokens WHERE token = $1 AND used = 0 AND expires_at > $2'
+      : 'SELECT * FROM user_approval_tokens WHERE token = ? AND used = 0 AND expires_at > ?';
+    const approvalToken = isPostgres
+      ? (await db.query(tokenQuery, [token, new Date().toISOString()])).rows[0]
+      : db.prepare(tokenQuery).get(token, new Date().toISOString());
 
     if (!approvalToken) {
       return res.status(400).json({ error: 'Link de aprovação inválido ou expirado' });
     }
 
     // Approve user
-    db.prepare('UPDATE users SET status = ? WHERE id = ?').run('approved', approvalToken.user_id);
+    const updateQuery = isPostgres
+      ? 'UPDATE users SET status = $1 WHERE id = $2'
+      : 'UPDATE users SET status = ? WHERE id = ?';
+    if (isPostgres) {
+      await db.query(updateQuery, ['approved', approvalToken.user_id]);
+    } else {
+      db.prepare(updateQuery).run('approved', approvalToken.user_id);
+    }
 
     // Mark token as used
-    db.prepare('UPDATE user_approval_tokens SET used = 1 WHERE id = ?').run(approvalToken.id);
+    const tokenUpdateQuery = isPostgres
+      ? 'UPDATE user_approval_tokens SET used = 1 WHERE id = $1'
+      : 'UPDATE user_approval_tokens SET used = 1 WHERE id = ?';
+    if (isPostgres) {
+      await db.query(tokenUpdateQuery, [approvalToken.id]);
+    } else {
+      db.prepare(tokenUpdateQuery).run(approvalToken.id);
+    }
 
     // Get user details
-    const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(approvalToken.user_id);
+    const userQuery = isPostgres
+      ? 'SELECT id, email FROM users WHERE id = $1'
+      : 'SELECT id, email FROM users WHERE id = ?';
+    const user = isPostgres
+      ? (await db.query(userQuery, [approvalToken.user_id])).rows[0]
+      : db.prepare(userQuery).get(approvalToken.user_id);
 
     res.json({
       message: 'User approved successfully',
@@ -225,7 +292,13 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     const genericMessage = 'Se existir uma conta com este email, enviámos um link de recuperação.';
-    const user = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email);
+    const userQuery = isPostgres
+      ? 'SELECT id, email FROM users WHERE email = $1'
+      : 'SELECT id, email FROM users WHERE email = ?';
+    const user = isPostgres
+      ? (await db.query(userQuery, [email])).rows[0]
+      : db.prepare(userQuery).get(email);
+    
     if (!user) {
       return res.json({ message: genericMessage, emailSent: true });
     }
@@ -233,10 +306,20 @@ router.post('/forgot-password', async (req, res) => {
     const resetToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString();
 
-    db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').run(user.id);
-    db.prepare(
-      'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
-    ).run(user.id, resetToken, expiresAt);
+    const deleteQuery = isPostgres
+      ? 'DELETE FROM password_reset_tokens WHERE user_id = $1'
+      : 'DELETE FROM password_reset_tokens WHERE user_id = ?';
+    const insertQuery = isPostgres
+      ? 'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)'
+      : 'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)';
+    
+    if (isPostgres) {
+      await db.query(deleteQuery, [user.id]);
+      await db.query(insertQuery, [user.id, resetToken, expiresAt]);
+    } else {
+      db.prepare(deleteQuery).run(user.id);
+      db.prepare(insertQuery).run(user.id, resetToken, expiresAt);
+    }
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     
@@ -285,9 +368,12 @@ router.post('/reset-password/:token', async (req, res) => {
     }
 
     // Find valid reset token
-    const resetToken = db.prepare(
-      'SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0 AND expires_at > ?'
-    ).get(token, new Date().toISOString());
+    const tokenQuery = isPostgres
+      ? 'SELECT * FROM password_reset_tokens WHERE token = $1 AND used = 0 AND expires_at > $2'
+      : 'SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0 AND expires_at > ?';
+    const resetToken = isPostgres
+      ? (await db.query(tokenQuery, [token, new Date().toISOString()])).rows[0]
+      : db.prepare(tokenQuery).get(token, new Date().toISOString());
 
     if (!resetToken) {
       return res.status(400).json({ error: 'Link de recuperação inválido ou expirado' });
@@ -297,10 +383,24 @@ router.post('/reset-password/:token', async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     // Update user password
-    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, resetToken.user_id);
+    const updateQuery = isPostgres
+      ? 'UPDATE users SET password = $1 WHERE id = $2'
+      : 'UPDATE users SET password = ? WHERE id = ?';
+    if (isPostgres) {
+      await db.query(updateQuery, [hashedPassword, resetToken.user_id]);
+    } else {
+      db.prepare(updateQuery).run(hashedPassword, resetToken.user_id);
+    }
 
     // Mark token as used
-    db.prepare('UPDATE password_reset_tokens SET used = 1 WHERE id = ?').run(resetToken.id);
+    const tokenUpdateQuery = isPostgres
+      ? 'UPDATE password_reset_tokens SET used = 1 WHERE id = $1'
+      : 'UPDATE password_reset_tokens SET used = 1 WHERE id = ?';
+    if (isPostgres) {
+      await db.query(tokenUpdateQuery, [resetToken.id]);
+    } else {
+      db.prepare(tokenUpdateQuery).run(resetToken.id);
+    }
 
     res.json({ message: 'Password redefinida com sucesso' });
   } catch (error) {

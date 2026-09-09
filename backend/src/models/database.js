@@ -303,6 +303,61 @@ function normalizedRecurrenceMonths(months) {
   return Math.max(1, Math.min(60, months));
 }
 
+// Database abstraction layer for compatibility between SQLite and PostgreSQL
+function query(sql, params = []) {
+  if (isPostgres) {
+    // PostgreSQL - async query
+    return db.query(sql, params);
+  } else {
+    // SQLite - sync query
+    return db.prepare(sql).all(...params);
+  }
+}
+
+function queryOne(sql, params = []) {
+  if (isPostgres) {
+    // PostgreSQL - async query for single row
+    return db.query(sql, params).then(result => result.rows[0]);
+  } else {
+    // SQLite - sync query for single row
+    return db.prepare(sql).get(...params);
+  }
+}
+
+function run(sql, params = []) {
+  if (isPostgres) {
+    // PostgreSQL - async insert/update
+    return db.query(sql, params).then(result => ({
+      lastInsertRowid: result.rows[0]?.id,
+      changes: result.rowCount
+    }));
+  } else {
+    // SQLite - sync insert/update
+    return db.prepare(sql).run(...params);
+  }
+}
+
+async function transaction(callback) {
+  if (isPostgres) {
+    // PostgreSQL transaction
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } else {
+    // SQLite transaction (sync)
+    return db.transaction(callback)();
+  }
+}
+
 module.exports = {
   db,
   isPostgres,
@@ -310,5 +365,9 @@ module.exports = {
   financialPeriod,
   currentFinancialPeriodMonth,
   adjustedDebitDate,
-  normalizedRecurrenceMonths
+  normalizedRecurrenceMonths,
+  query,
+  queryOne,
+  run,
+  transaction
 };

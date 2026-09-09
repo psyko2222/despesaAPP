@@ -4,14 +4,14 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { getLogs, clearLogs } = require('../services/logger');
 
 // Get all error logs (admin only)
-router.get('/', authenticateToken, requireAdmin, (req, res) => {
+router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100;
     const offset = parseInt(req.query.offset) || 0;
     const level = req.query.level || null;
     const userId = req.query.userId ? parseInt(req.query.userId) : null;
 
-    const logs = getLogs({ limit, offset, level, userId });
+    const logs = await getLogs({ limit, offset, level, userId });
     
     res.json({
       logs,
@@ -26,10 +26,10 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Clear old logs (admin only)
-router.delete('/clear', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/clear', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const olderThanDays = parseInt(req.query.olderThanDays) || 30;
-    const result = clearLogs({ olderThanDays });
+    const result = await clearLogs({ olderThanDays });
     
     res.json({
       message: 'Logs cleared successfully',

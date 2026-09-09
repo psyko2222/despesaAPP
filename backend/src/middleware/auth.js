@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { db } = require('../models/database');
+const { db, isPostgres } = require('../models/database');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
 
@@ -29,7 +29,7 @@ function generateToken(user) {
 }
 
 // Middleware to check if user has access to shared data
-function checkDataAccess(req, res, next) {
+async function checkDataAccess(req, res, next) {
   const userId = req.user.id;
   const targetUserId = parseInt(req.params.userId || req.body.user_id || req.query.userId);
 
@@ -41,11 +41,17 @@ function checkDataAccess(req, res, next) {
   }
 
   // Check if user has access to target user's data
-  const share = db.prepare(`
-    SELECT * FROM account_shares 
-    WHERE (owner_id = ? AND shared_with_id = ? AND status = 'accepted')
-       OR (owner_id = ? AND shared_with_id = ? AND status = 'accepted')
-  `).get(userId, targetUserId, targetUserId, userId);
+  const shareQuery = isPostgres
+    ? `SELECT * FROM account_shares 
+       WHERE (owner_id = $1 AND shared_with_id = $2 AND status = 'accepted')
+          OR (owner_id = $3 AND shared_with_id = $4 AND status = 'accepted')`
+    : `SELECT * FROM account_shares 
+       WHERE (owner_id = ? AND shared_with_id = ? AND status = 'accepted')
+          OR (owner_id = ? AND shared_with_id = ? AND status = 'accepted')`;
+  
+  const share = isPostgres
+    ? (await db.query(shareQuery, [userId, targetUserId, targetUserId, userId])).rows[0]
+    : db.prepare(shareQuery).get(userId, targetUserId, targetUserId, userId);
 
   if (!share) {
     return res.status(403).json({ error: 'No access to this data' });
@@ -88,8 +94,13 @@ function requireDeleteAccess(req, res, next) {
 }
 
 // Middleware to check if user is admin
-function requireAdmin(req, res, next) {
-  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
+async function requireAdmin(req, res, next) {
+  const userQuery = isPostgres
+    ? 'SELECT role FROM users WHERE id = $1'
+    : 'SELECT role FROM users WHERE id = ?';
+  const user = isPostgres
+    ? (await db.query(userQuery, [req.user.id])).rows[0]
+    : db.prepare(userQuery).get(req.user.id);
 
   if (!user || user.role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' });
