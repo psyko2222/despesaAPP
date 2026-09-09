@@ -133,8 +133,6 @@ router.get('/series/:seriesId', authenticateToken, checkDataAccess, async (req, 
 // Create expense
 router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (req, res) => {
   try {
-    console.log('=== DEBUG: Raw request body ===', JSON.stringify(req.body));
-    
     const userId = req.dataUserId;
     const {
       description,
@@ -148,7 +146,7 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
       fixed_amount,
       originalDay,
       original_day,
-      recurrenceMonths = 1,
+      recurrenceMonths,
       recurrence_months
     } = req.body;
 
@@ -161,7 +159,7 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
     const finalFixedAmount = (rawFixedAmount === true || rawFixedAmount === 1 || rawFixedAmount === 'true');
 
     const finalOriginalDay = originalDay !== undefined ? originalDay : original_day;
-    const finalRecurrenceMonths = recurrenceMonths !== undefined ? recurrenceMonths : recurrence_months;
+    const finalRecurrenceMonths = recurrence_months !== undefined ? recurrence_months : recurrenceMonths;
 
     if (!description || !finalDebitDate) {
       return res.status(400).json({ error: 'Missing required fields' });
