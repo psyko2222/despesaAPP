@@ -4,8 +4,6 @@
   "framework": "nextjs",
   "installCommand": "npm install",
   "env": {
-    "NEXT_PUBLIC_API_URL": {
-      "description": "URL da API backend"
-    }
+    "NEXT_PUBLIC_API_URL": "https://sua-url-do-backend.com"
   }
 }
