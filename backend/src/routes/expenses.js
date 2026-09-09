@@ -133,6 +133,8 @@ router.get('/series/:seriesId', authenticateToken, checkDataAccess, async (req, 
 // Create expense
 router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (req, res) => {
   try {
+    console.log('=== DEBUG: Raw request body ===', JSON.stringify(req.body));
+    
     const userId = req.dataUserId;
     const {
       description,
