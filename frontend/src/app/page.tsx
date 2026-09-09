@@ -520,7 +520,9 @@ export default function HomePage() {
         )}
 
         {activeTab === 'admin' && (
-          <AdminPanel />
+          <div className="h-[calc(100vh-12rem)] overflow-y-auto">
+            <AdminPanel />
+          </div>
         )}
       </main>
 

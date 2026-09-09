@@ -303,10 +303,10 @@ export function AdminPanel() {
       </CardHeader>
       <CardContent>
         {/* Tabs */}
-        <div className="flex border-b mb-6">
+        <div className="flex border-b mb-6 overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
               activeTab === 'pending'
                 ? 'border-primary-600 text-primary-600'
                 : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -316,7 +316,7 @@ export function AdminPanel() {
           </button>
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
               activeTab === 'all'
                 ? 'border-primary-600 text-primary-600'
                 : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -326,7 +326,7 @@ export function AdminPanel() {
           </button>
           <button
             onClick={() => setActiveTab('password-reset')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
               activeTab === 'password-reset'
                 ? 'border-primary-600 text-primary-600'
                 : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -336,7 +336,7 @@ export function AdminPanel() {
           </button>
           <button
             onClick={() => setActiveTab('logs')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
               activeTab === 'logs'
                 ? 'border-primary-600 text-primary-600'
                 : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -346,7 +346,7 @@ export function AdminPanel() {
           </button>
           <button
             onClick={() => setActiveTab('config')}
-            className={`px-4 py-2 border-b-2 transition-colors ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
               activeTab === 'config'
                 ? 'border-primary-600 text-primary-600'
                 : 'border-transparent text-gray-600 hover:text-gray-900'
