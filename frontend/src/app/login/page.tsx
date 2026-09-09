@@ -164,7 +164,7 @@ export default function LoginPage() {
                       className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                     />
                     <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700">
-                      Permanecer logado
+                      Permanecer logado (180 dias)
                     </label>
                   </div>
                 )}
