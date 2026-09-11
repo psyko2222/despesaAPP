@@ -9,5 +9,10 @@
   "git": {
     "deploymentEnabled": true
   },
-  "regions": ["iad1"]
+  "regions": ["iad1"],
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_API_URL": "https://despesaapp.onrender.com"
+    }
+  }
 }
