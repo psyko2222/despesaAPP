@@ -7,10 +7,29 @@ let messaging = null;
 
 function initializeFirebase() {
   try {
-    // Try to load service account from file
-    const serviceAccountPath = path.join(__dirname, '../../firebase-service-account.json');
+    let serviceAccount;
     
-    const serviceAccount = require(serviceAccountPath);
+    // Try to load from environment variable first (Render)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      try {
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        console.log('Firebase credentials loaded from environment variable');
+      } catch (parseError) {
+        console.error('Error parsing FIREBASE_SERVICE_ACCOUNT:', parseError.message);
+        return false;
+      }
+    } else {
+      // Fallback to file (local development)
+      try {
+        const serviceAccountPath = path.join(__dirname, '../../firebase-service-account.json');
+        serviceAccount = require(serviceAccountPath);
+        console.log('Firebase credentials loaded from file');
+      } catch (fileError) {
+        console.error('Firebase service account file not found:', fileError.message);
+        console.log('Push notifications will not be available');
+        return false;
+      }
+    }
     
     const firebaseConfig = {
       credential: admin.credential.cert(serviceAccount),

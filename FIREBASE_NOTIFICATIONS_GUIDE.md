@@ -56,11 +56,16 @@ O sistema de notificações push usando Firebase Cloud Messaging (FCM) foi imple
 
 ### 1. Variáveis de Ambiente (Backend)
 
-O arquivo `firebase-service-account.json` já está configurado com as credenciais do Firebase Admin SDK.
+**Para o Render (Produção):**
+1. O código agora suporta carregar as credenciais Firebase de uma variável de ambiente
+2. No dashboard do Render, adiciona a variável:
+   - **Nome**: `FIREBASE_SERVICE_ACCOUNT`
+   - **Valor**: O conteúdo completo do arquivo `firebase-service-account.json` (como string JSON)
+3. O `firebase-service-account.json` está no `.gitignore` por segurança
 
-No Render, certifica-te de que:
-- O arquivo `firebase-service-account.json` está incluído no deployment
-- Ou configura as variáveis de ambiente necessárias
+**Para Desenvolvimento Local:**
+- O arquivo `firebase-service-account.json` deve estar na pasta `backend/`
+- O código vai tentar carregar deste arquivo se a variável de ambiente não estiver definida
 
 ### 2. Configuração Frontend
 
