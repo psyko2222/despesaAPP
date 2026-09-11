@@ -62,7 +62,24 @@ export function SettingsScreen() {
     if (!settings) return;
     setSaving(true);
     try {
-      await settingsAPI.update({ ...settings, auto_cleanup_years: cleanupYears });
+      // Only send defined values to avoid validation errors
+      const updateData: Partial<Settings> = {
+        notifications_enabled: settings.notifications_enabled,
+        debit_notifications_enabled: settings.debit_notifications_enabled,
+        debit_reminder_days: settings.debit_reminder_days,
+        debit_reminder_hour: settings.debit_reminder_hour,
+        debit_reminder_minute: settings.debit_reminder_minute,
+        variable_reminder_enabled: settings.variable_reminder_enabled,
+        variable_reminder_day: settings.variable_reminder_day,
+        variable_reminder_hour: settings.variable_reminder_hour,
+        variable_reminder_minute: settings.variable_reminder_minute,
+        variable_snooze_minutes: settings.variable_snooze_minutes,
+        tolerance: settings.tolerance,
+        stats_window_months: settings.stats_window_months,
+        auto_cleanup_years: cleanupYears,
+      };
+      
+      await settingsAPI.update(updateData);
       alert('Definições guardadas com sucesso!');
     } catch (error) {
       console.error('Failed to save settings:', error);

@@ -43,6 +43,9 @@ export interface Settings {
   terms_accepted_version: number;
   terms_accepted_at?: string;
   auto_cleanup_years?: number;
+  stats_comparison?: string;
+  variable_reminder_time?: string;
+  variable_reminder_scheduled?: number;
 }
 
 export interface AuthResponse {
