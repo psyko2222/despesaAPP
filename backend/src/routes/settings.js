@@ -53,6 +53,9 @@ router.get('/', authenticateToken, async (req, res) => {
 router.put('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
+    console.log('Update settings request for user:', userId);
+    console.log('Request body:', req.body);
+
     const {
       notifications_enabled,
       debit_notifications_enabled,
@@ -152,6 +155,9 @@ router.put('/', authenticateToken, async (req, res) => {
       params.push(variable_reminder_scheduled);
     }
 
+    console.log('Updates to apply:', updates);
+    console.log('Parameters:', params);
+
     if (updates.length === 0) {
       // No fields to update, just return current settings
       const sql = isPostgres
@@ -165,6 +171,8 @@ router.put('/', authenticateToken, async (req, res) => {
     params.push(userId);
 
     const updateSql = `UPDATE settings SET ${updates.join(', ')}`;
+    console.log('Update SQL:', updateSql);
+    
     await run(updateSql, params);
 
     const sql = isPostgres
@@ -174,7 +182,8 @@ router.put('/', authenticateToken, async (req, res) => {
     res.json(settings);
   } catch (error) {
     console.error('Update settings error:', error);
-    res.status(500).json({ error: 'Failed to update settings' });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to update settings', details: error.message });
   }
 });
 

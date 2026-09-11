@@ -8,5 +8,6 @@
   },
   "git": {
     "deploymentEnabled": true
-  }
+  },
+  "regions": ["iad1"]
 }
