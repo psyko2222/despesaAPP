@@ -15,13 +15,20 @@ export function useNotifications() {
 
     // Get current permission status
     if (typeof window !== 'undefined' && 'Notification' in window) {
-      setPermission(Notification.permission);
-    }
+      const currentPermission = Notification.permission;
+      setPermission(currentPermission);
 
-    // Load saved token from localStorage
-    const savedToken = localStorage.getItem('fcm_token');
-    if (savedToken) {
-      setToken(savedToken);
+      // If permission is denied, clear any saved token
+      if (currentPermission === 'denied') {
+        localStorage.removeItem('fcm_token');
+        setToken(null);
+      } else {
+        // Load saved token from localStorage only if permission is not denied
+        const savedToken = localStorage.getItem('fcm_token');
+        if (savedToken) {
+          setToken(savedToken);
+        }
+      }
     }
 
     // Set up message listener
@@ -57,6 +64,9 @@ export function useNotifications() {
       } else {
         setPermission('denied');
         setError('Permission denied');
+        // Clear token if permission was denied
+        localStorage.removeItem('fcm_token');
+        setToken(null);
         return false;
       }
     } catch (err) {
