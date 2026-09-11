@@ -7,6 +7,9 @@
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
   "orientation": "portrait",
+  "scope": "/",
+  "categories": ["finance", "productivity"],
+  "screenshots": [],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -19,6 +22,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Adicionar Despesa",
+      "short_name": "Nova Despesa",
+      "description": "Adicionar nova despesa rapidamente",
+      "url": "/?action=add",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Ver Estatísticas",
+      "short_name": "Estatísticas",
+      "description": "Ver estatísticas de despesas",
+      "url": "/?tab=statistics",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
