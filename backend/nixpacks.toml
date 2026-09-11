@@ -1,0 +1,10 @@
+[phases.build]
+cmds = ["npm install"]
+
+[phases.start]
+cmds = ["npm start"]
+
+[static]
+  [static.0]
+    guest = "/data"
+    host = "/data"
