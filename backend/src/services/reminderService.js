@@ -14,7 +14,7 @@ async function checkDebitReminders() {
     
     // Get all users with debit notifications enabled
     const usersSql = isPostgres
-      ? `SELECT u.id, u.email, u.fcm_token, s.debit_reminder_days, s.debit_reminder_hour, s.debit_reminder_minute 
+      ? `SELECT u.id, u.email, s.debit_reminder_days, s.debit_reminder_hour, s.debit_reminder_minute 
          FROM users u 
          JOIN settings s ON u.id = s.user_id 
          WHERE s.debit_notifications_enabled = 1 
@@ -44,7 +44,8 @@ async function checkDebitReminders() {
 // Send debit reminders for a specific user
 async function sendUserDebitReminders(user) {
   try {
-    const { id: userId, email, fcm_token, debit_reminder_days } = user;
+    const { id: userId, email, debit_reminder_days } = user;
+    const fcm_token = user.fcm_token || null;
     
     // Calculate reminder date
     const reminderDate = new Date();
@@ -120,7 +121,7 @@ async function triggerReminderForUser(userId) {
   try {
     // Get user with settings
     const userSql = isPostgres
-      ? `SELECT u.id, u.email, u.fcm_token, s.debit_reminder_days, s.debit_reminder_hour, s.debit_reminder_minute 
+      ? `SELECT u.id, u.email, s.debit_reminder_days, s.debit_reminder_hour, s.debit_reminder_minute 
          FROM users u 
          JOIN settings s ON u.id = s.user_id 
          WHERE u.id = $1`

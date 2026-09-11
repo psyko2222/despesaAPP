@@ -167,10 +167,8 @@ router.put('/', authenticateToken, async (req, res) => {
       return res.json(settings);
     }
 
-    updates.push(isPostgres ? `user_id = $${paramIndex++}` : `user_id = ?`);
+    const updateSql = `UPDATE settings SET ${updates.join(', ')} WHERE user_id = ${isPostgres ? `$${paramIndex}` : '?'}`;
     params.push(userId);
-
-    const updateSql = `UPDATE settings SET ${updates.join(', ')}`;
     console.log('Update SQL:', updateSql);
     
     await run(updateSql, params);
