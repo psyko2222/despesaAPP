@@ -63,7 +63,7 @@ export function SettingsScreen() {
     setSaving(true);
     try {
       // Only send defined values to avoid validation errors
-      const updateData: Partial<Settings> = {
+      const updateData: any = {
         notifications_enabled: settings.notifications_enabled,
         debit_notifications_enabled: settings.debit_notifications_enabled,
         debit_reminder_days: settings.debit_reminder_days,
@@ -79,10 +79,13 @@ export function SettingsScreen() {
         auto_cleanup_years: cleanupYears,
       };
       
-      await settingsAPI.update(updateData);
+      console.log('Sending settings update:', updateData);
+      const response = await settingsAPI.update(updateData);
+      console.log('Settings update response:', response);
       alert('Definições guardadas com sucesso!');
     } catch (error) {
       console.error('Failed to save settings:', error);
+      console.error('Error details:', error.response?.data);
       alert('Erro ao guardar definições');
     } finally {
       setSaving(false);
