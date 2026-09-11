@@ -34,8 +34,7 @@ async function initializeDatabase() {
         status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
         role TEXT DEFAULT 'user' CHECK(role IN ('user', 'admin')),
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        last_login TEXT,
-        fcm_token TEXT
+        last_login TEXT
       );
 
       CREATE TABLE IF NOT EXISTS expenses (
@@ -172,8 +171,7 @@ async function initializeDatabase() {
         status VARCHAR(50) DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
         role VARCHAR(50) DEFAULT 'user' CHECK(role IN ('user', 'admin')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_login TIMESTAMP,
-        fcm_token VARCHAR(500)
+        last_login TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS expenses (

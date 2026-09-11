@@ -53,9 +53,6 @@ router.get('/', authenticateToken, async (req, res) => {
 router.put('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log('Update settings request for user:', userId);
-    console.log('Request body:', req.body);
-
     const {
       notifications_enabled,
       debit_notifications_enabled,
@@ -71,10 +68,7 @@ router.put('/', authenticateToken, async (req, res) => {
       stats_window_months,
       terms_accepted_version,
       terms_accepted_at,
-      auto_cleanup_years,
-      stats_comparison,
-      variable_reminder_time,
-      variable_reminder_scheduled
+      auto_cleanup_years
     } = req.body;
 
     // Build dynamic update query to handle undefined values
@@ -142,21 +136,6 @@ router.put('/', authenticateToken, async (req, res) => {
       updates.push(isPostgres ? `auto_cleanup_years = $${paramIndex++}` : `auto_cleanup_years = ?`);
       params.push(auto_cleanup_years);
     }
-    if (stats_comparison !== undefined) {
-      updates.push(isPostgres ? `stats_comparison = $${paramIndex++}` : `stats_comparison = ?`);
-      params.push(stats_comparison);
-    }
-    if (variable_reminder_time !== undefined) {
-      updates.push(isPostgres ? `variable_reminder_time = $${paramIndex++}` : `variable_reminder_time = ?`);
-      params.push(variable_reminder_time);
-    }
-    if (variable_reminder_scheduled !== undefined) {
-      updates.push(isPostgres ? `variable_reminder_scheduled = $${paramIndex++}` : `variable_reminder_scheduled = ?`);
-      params.push(variable_reminder_scheduled);
-    }
-
-    console.log('Updates to apply:', updates);
-    console.log('Parameters:', params);
 
     if (updates.length === 0) {
       // No fields to update, just return current settings
@@ -167,10 +146,10 @@ router.put('/', authenticateToken, async (req, res) => {
       return res.json(settings);
     }
 
-    const updateSql = `UPDATE settings SET ${updates.join(', ')} WHERE user_id = ${isPostgres ? `$${paramIndex}` : '?'}`;
+    updates.push(isPostgres ? `user_id = $${paramIndex++}` : `user_id = ?`);
     params.push(userId);
-    console.log('Update SQL:', updateSql);
-    
+
+    const updateSql = `UPDATE settings SET ${updates.join(', ')}`;
     await run(updateSql, params);
 
     const sql = isPostgres
@@ -180,8 +159,7 @@ router.put('/', authenticateToken, async (req, res) => {
     res.json(settings);
   } catch (error) {
     console.error('Update settings error:', error);
-    console.error('Error stack:', error.stack);
-    res.status(500).json({ error: 'Failed to update settings', details: error.message });
+    res.status(500).json({ error: 'Failed to update settings' });
   }
 });
 
@@ -198,8 +176,7 @@ router.patch('/:key', authenticateToken, async (req, res) => {
       'debit_reminder_hour', 'debit_reminder_minute', 'variable_reminder_enabled',
       'variable_reminder_day', 'variable_reminder_hour', 'variable_reminder_minute',
       'variable_snooze_minutes', 'tolerance', 'stats_window_months',
-      'terms_accepted_version', 'terms_accepted_at', 'auto_cleanup_years',
-      'stats_comparison', 'variable_reminder_time', 'variable_reminder_scheduled'
+      'terms_accepted_version', 'terms_accepted_at', 'auto_cleanup_years'
     ];
 
     if (!validKeys.includes(key)) {

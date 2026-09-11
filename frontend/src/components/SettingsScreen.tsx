@@ -4,10 +4,8 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { settingsAPI, backupAPI, authAPI, notificationsAPI } from '@/lib/api';
+import { settingsAPI, backupAPI, authAPI } from '@/lib/api';
 import { Settings } from '@/types';
-import { useNotifications } from '@/hooks/useNotifications';
-import { Bell, BellOff, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
 export function SettingsScreen() {
@@ -27,17 +25,6 @@ export function SettingsScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
-  
-  // Notification hook
-  const {
-    permission,
-    token: fcmToken,
-    supported: notificationsSupported,
-    loading: notificationLoading,
-    error: notificationError,
-    requestPermission,
-    removeToken
-  } = useNotifications();
 
   useEffect(() => {
     loadSettings();
@@ -62,30 +49,10 @@ export function SettingsScreen() {
     if (!settings) return;
     setSaving(true);
     try {
-      // Only send defined values to avoid validation errors
-      const updateData: any = {
-        notifications_enabled: settings.notifications_enabled,
-        debit_notifications_enabled: settings.debit_notifications_enabled,
-        debit_reminder_days: settings.debit_reminder_days,
-        debit_reminder_hour: settings.debit_reminder_hour,
-        debit_reminder_minute: settings.debit_reminder_minute,
-        variable_reminder_enabled: settings.variable_reminder_enabled,
-        variable_reminder_day: settings.variable_reminder_day,
-        variable_reminder_hour: settings.variable_reminder_hour,
-        variable_reminder_minute: settings.variable_reminder_minute,
-        variable_snooze_minutes: settings.variable_snooze_minutes,
-        tolerance: settings.tolerance,
-        stats_window_months: settings.stats_window_months,
-        auto_cleanup_years: cleanupYears,
-      };
-      
-      console.log('Sending settings update:', updateData);
-      const response = await settingsAPI.update(updateData);
-      console.log('Settings update response:', response);
+      await settingsAPI.update({ ...settings, auto_cleanup_years: cleanupYears });
       alert('Definições guardadas com sucesso!');
     } catch (error) {
       console.error('Failed to save settings:', error);
-      console.error('Error details:', error.response?.data);
       alert('Erro ao guardar definições');
     } finally {
       setSaving(false);
@@ -265,103 +232,6 @@ export function SettingsScreen() {
                 onChange={(e) => setSettings({ ...settings, debit_notifications_enabled: e.target.checked ? 1 : 0 })}
                 className="w-5 h-5"
               />
-            </div>
-            
-            {/* Push Notifications Section */}
-            <div className="border-t pt-4 mt-4">
-              <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
-                {fcmToken ? <Bell className="w-5 h-5 mr-2 text-green-600" /> : <BellOff className="w-5 h-5 mr-2 text-gray-400" />}
-                Notificações Push
-              </h3>
-              
-              {!notificationsSupported && (
-                <p className="text-sm text-gray-500 mb-3">
-                  Notificações push não são suportadas neste navegador.
-                </p>
-              )}
-              
-              {notificationsSupported && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Estado:</span>
-                    <span className={`font-medium ${permission === 'granted' ? 'text-green-600' : permission === 'denied' ? 'text-red-600' : 'text-yellow-600'}`}>
-                      {permission === 'granted' ? 'Ativado' : permission === 'denied' ? 'Bloqueado' : 'Inativo'}
-                    </span>
-                  </div>
-                  
-                  {fcmToken ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-green-600">Notificações push ativas</span>
-                      <Button
-                        onClick={removeToken}
-                        variant="outline"
-                        size="sm"
-                        disabled={notificationLoading}
-                      >
-                        {notificationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Desativar'}
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={requestPermission}
-                      disabled={notificationLoading || permission === 'denied'}
-                      className="w-full"
-                    >
-                      {notificationLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          A processar...
-                        </>
-                      ) : permission === 'denied' ? (
-                        'Permissão negada'
-                      ) : (
-                        <>
-                          <Bell className="w-4 h-4 mr-2" />
-                          Ativar Notificações Push
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  
-                  {notificationError && (
-                    <p className="text-sm text-red-600">{notificationError}</p>
-                  )}
-                  
-                  {/* Test buttons */}
-                  {fcmToken && (
-                    <div className="flex space-x-2 pt-2">
-                      <Button
-                        onClick={async () => {
-                          try {
-                            await notificationsAPI.testNotification();
-                            alert('Notificação de teste enviada com sucesso!');
-                          } catch (error) {
-                            alert('Erro ao enviar notificação de teste');
-                          }
-                        }}
-                        variant="outline"
-                        size="sm"
-                      >
-                        Testar Notificação
-                      </Button>
-                      <Button
-                        onClick={async () => {
-                          try {
-                            await notificationsAPI.triggerReminder();
-                            alert('Lembrete de débito enviado com sucesso!');
-                          } catch (error) {
-                            alert('Erro ao enviar lembrete de débito');
-                          }
-                        }}
-                        variant="outline"
-                        size="sm"
-                      >
-                        Testar Lembrete
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
             <div>
               <label className="block text-gray-700 mb-1">Dias antes do débito</label>

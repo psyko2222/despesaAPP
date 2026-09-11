@@ -157,21 +157,4 @@ export const logsAPI = {
     api.delete<any>(`/logs/clear${olderThanDays ? `?olderThanDays=${olderThanDays}` : ''}`),
 };
 
-export const notificationsAPI = {
-  registerToken: (token: string) =>
-    api.post<{ success: boolean; message: string }>('/notifications/register-token', { token }),
-  
-  getStatus: () =>
-    api.get<{ firebaseConfigured: boolean; pushEnabled: boolean }>('/notifications/status'),
-  
-  removeToken: () =>
-    api.delete<{ success: boolean; message: string }>('/notifications/remove-token'),
-  
-  testNotification: () =>
-    api.post<{ success: boolean; message: string }>('/notifications/test'),
-  
-  triggerReminder: () =>
-    api.post<{ success: boolean; message: string }>('/notifications/trigger-reminder'),
-};
-
 export default api;

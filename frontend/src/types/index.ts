@@ -22,7 +22,6 @@ export interface User {
   last_login?: string;
   role?: string;
   status?: string;
-  fcm_token?: string;
 }
 
 export interface Settings {
@@ -43,9 +42,6 @@ export interface Settings {
   terms_accepted_version: number;
   terms_accepted_at?: string;
   auto_cleanup_years?: number;
-  stats_comparison?: string;
-  variable_reminder_time?: string;
-  variable_reminder_scheduled?: number;
 }
 
 export interface AuthResponse {

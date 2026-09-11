@@ -3,7 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { initializeDatabase } = require('./models/database');
-const { startReminderScheduler } = require('./services/reminderService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -45,7 +44,6 @@ app.use('/api/backup', require('./routes/backup'));
 app.use('/api/shares', require('./routes/shares'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/logs', require('./routes/logs'));
-app.use('/api/notifications', require('./routes/notifications'));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -69,9 +67,6 @@ async function startServer() {
     console.log('Initializing database...');
     await initializeDatabase();
     console.log('Database initialization completed');
-    
-    // Start reminder scheduler
-    startReminderScheduler();
     
     // Start server after database is ready
     app.listen(PORT, '0.0.0.0', () => {

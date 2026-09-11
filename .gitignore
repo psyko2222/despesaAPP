@@ -10,10 +10,6 @@ pnpm-lock.yaml
 .env.production
 .env.development
 
-# Firebase service account (sensitive credentials)
-firebase-service-account.json
-**/firebase-service-account.json
-
 # Database files
 *.db
 *.sqlite
@@ -58,3 +54,6 @@ coverage/
 .cache/
 .temp/
 tmp/
+
+# Firebase credentials
+firebase-service-account.json

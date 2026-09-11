@@ -31,9 +31,6 @@ services:
         sync: false # Configure manualmente no dashboard
       - key: SMTP_FROM
         sync: false # Configure manualmente no dashboard
-      # Firebase Configuration
-      - key: FIREBASE_SERVICE_ACCOUNT
-        sync: false # Configure manualmente no dashboard com o JSON do service account
 
   # Frontend Service
   - type: web
