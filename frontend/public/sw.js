@@ -1,4 +1,4 @@
-const CACHE_NAME = 'despesas-v3';
+const CACHE_NAME = 'despesas-v4';
 const urlsToCache = [
   '/',
   '/manifest.json',
@@ -22,6 +22,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
+            console.log('[sw.js] A apagar cache antiga:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -30,10 +31,26 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Estratégia de cache simples
+// Estratégia de cache: Network-First para navegação, Cache-First para ficheiros estáticos
 self.addEventListener('fetch', (event) => {
   // Não intercepta pedidos de API
   if (event.request.url.includes('/api/')) {
+    return;
+  }
+
+  // Para navegação HTML (páginas), vai sempre à rede primeiro para garantir versão mais recente
+  if (event.request.mode === 'navigate' || event.request.destination === 'document') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
     return;
   }
 

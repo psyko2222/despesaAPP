@@ -26,6 +26,7 @@ export function StatisticsScreen({ userId }: { userId?: number } = {}) {
 
   const loadStatistics = async () => {
     setLoading(true);
+    const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
     try {
       // 1. Fetch settings (or use existing)
       const settingsPromise = settings ? Promise.resolve({ data: settings }) : settingsAPI.get();
@@ -55,6 +56,8 @@ export function StatisticsScreen({ userId }: { userId?: number } = {}) {
         setRecurringSeries(seriesMap);
         setCurrentYearTotal(data.currentYearTotal);
         setPreviousYearEquivalentTotal(data.previousYearEquivalentTotal);
+        const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime;
+        console.log(`[Statistics] Carregado com sucesso via endpoint rápido em ${elapsed.toFixed(0)}ms`);
         return;
       } catch (summaryErr) {
         console.warn('Fast statistics summary failed, falling back to parallel fetch:', summaryErr);
@@ -136,6 +139,8 @@ export function StatisticsScreen({ userId }: { userId?: number } = {}) {
         windowAverage: windowAvg,
         windowTotals
       });
+      const elapsedFallback = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime;
+      console.log(`[Statistics] Carregado via fallback em ${elapsedFallback.toFixed(0)}ms`);
     } catch (error) {
       console.error('Failed to load statistics:', error);
     } finally {
