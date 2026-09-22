@@ -7,8 +7,16 @@ import { Input } from '@/components/ui/input';
 import { settingsAPI, backupAPI, authAPI, adminAPI } from '@/lib/api';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useToast } from '@/components/ui/toast';
-import { Bell, BellOff, CheckCircle2, AlertCircle, Send, Loader2, Sun, Moon, Monitor } from 'lucide-react';
+import { Bell, BellOff, CheckCircle2, AlertCircle, Send, Loader2, Sun, Moon, Monitor, Sliders, Database, Lock, Trash2 } from 'lucide-react';
 import { Settings } from '@/types';
+
+const SETTINGS_TABS = [
+  { id: 0, label: 'Notificações', icon: Bell, desc: 'Lembretes e avisos' },
+  { id: 1, label: 'Aplicação', icon: Sliders, desc: 'Tema e tolerância' },
+  { id: 2, label: 'Dados', icon: Database, desc: 'Backup e restauro' },
+  { id: 3, label: 'Segurança', icon: Lock, desc: 'Alterar password' },
+  { id: 4, label: 'Limpeza', icon: Trash2, desc: 'Registos antigos' },
+];
 
 export function SettingsScreen() {
   const toast = useToast();
@@ -231,30 +239,52 @@ export function SettingsScreen() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-        <p className="mt-2 text-gray-600">A carregar definições...</p>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">A carregar definições...</p>
       </div>
     );
   }
 
-  const tabs = ['Notificações', 'Aplicação', 'Dados', 'Segurança', 'Limpeza'];
-
   return (
-    <div className="h-full flex flex-col">
-      {/* Tabs */}
-      <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6 overflow-x-auto scrollbar-hide">
-        {tabs.map((tab, index) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(index)}
-            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 font-medium ${
-              activeTab === index
-                ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
-                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+    <div className="w-full space-y-4">
+      {/* Seletor Mobile Dropdown Proeminente (sm:hidden) */}
+      <div className="sm:hidden">
+        <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1.5">
+          Separador de Definições:
+        </label>
+        <select
+          value={activeTab}
+          onChange={(e) => setActiveTab(Number(e.target.value))}
+          className="w-full py-2.5 px-3 bg-white dark:bg-gray-900 border-2 border-primary-500 dark:border-primary-500 rounded-xl text-sm font-bold text-gray-900 dark:text-gray-100 shadow-sm focus:outline-none"
+        >
+          {SETTINGS_TABS.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label} ({t.desc})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Barra de Tabs em Pílulas com Ícones */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin">
+        {SETTINGS_TABS.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+                isActive
+                  ? 'bg-primary-600 text-white shadow-sm ring-2 ring-primary-500/20'
+                  : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab Content */}

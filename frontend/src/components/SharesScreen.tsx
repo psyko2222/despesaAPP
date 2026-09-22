@@ -109,17 +109,18 @@ export function SharesScreen() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="w-full space-y-4">
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6 overflow-x-auto scrollbar-hide">
+      <div className="flex gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin">
         {tabs.map((tab, index) => (
           <button
             key={tab}
+            type="button"
             onClick={() => setActiveTab(index)}
-            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 font-medium ${
+            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
               activeTab === index
-                ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
-                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                ? 'bg-primary-600 text-white shadow-sm ring-2 ring-primary-500/20'
+                : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
           >
             {tab}

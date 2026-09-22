@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { Home, Repeat, BarChart3, Settings, Users, Plus, Trash2, Edit, CheckCircle2, Circle, Search, Calendar, AlertTriangle, X } from 'lucide-react';
+import { Home, Repeat, BarChart3, Settings, Users, Plus, Trash2, Edit, CheckCircle2, Circle, Search, Calendar, AlertTriangle, X, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ExpenseForm } from '@/components/ExpenseForm';
@@ -42,6 +42,39 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
+  const [showDeadlines, setShowDeadlines] = useState(false);
+
+  // Totais e prazos calculados de forma reativa
+  const totalExpenses = useMemo(() => expenses.reduce((sum, exp) => sum + exp.amount_cents, 0), [expenses]);
+  const totalUnpaid = useMemo(() => expenses.filter(exp => !exp.paid).reduce((sum, exp) => sum + exp.amount_cents, 0), [expenses]);
+
+  const day1Info = useMemo(() => {
+    const day1Expenses = expenses.filter(exp => {
+      if (exp.paid) return false;
+      const expDate = new Date(exp.debit_date);
+      const deadline = getPaymentDeadlines(currentMonth).day1;
+      const period = financialPeriod(currentMonth);
+      const isInPeriod = expDate >= period.start && expDate <= period.end;
+      return isInPeriod && expDate <= deadline;
+    });
+    const total = day1Expenses.reduce((sum, exp) => sum + exp.amount_cents, 0);
+    const hasNoValue = day1Expenses.some(exp => exp.amount_cents === 0 && exp.fixed_amount === 0);
+    return { total, hasNoValue };
+  }, [expenses, currentMonth]);
+
+  const day20Info = useMemo(() => {
+    const day20Expenses = expenses.filter(exp => {
+      if (exp.paid) return false;
+      const expDate = new Date(exp.debit_date);
+      const deadline = getPaymentDeadlines(currentMonth).day20;
+      const period = financialPeriod(currentMonth);
+      const isInPeriod = expDate >= period.start && expDate <= period.end;
+      return isInPeriod && expDate <= deadline;
+    });
+    const total = day20Expenses.reduce((sum, exp) => sum + exp.amount_cents, 0);
+    const hasNoValue = day20Expenses.some(exp => exp.amount_cents === 0 && exp.fixed_amount === 0);
+    return { total, hasNoValue };
+  }, [expenses, currentMonth]);
 
   // Despesas filtradas por estado e pesquisa de texto
   const filteredExpenses = useMemo(() => {
@@ -332,72 +365,107 @@ export default function HomePage() {
               </Button>
             </div>
 
-            {/* Summary Card */}
-            <Card className="mb-4 sm:mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border-blue-200 dark:border-blue-900/60">
-              <CardContent className="p-4 sm:p-6">
-                <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-blue-900 dark:text-blue-200">Resumo do Mês</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="flex justify-between items-center p-2 rounded-lg bg-white/60 dark:bg-gray-900/40">
-                    <span className="text-gray-700 dark:text-gray-300 text-sm sm:text-base">Total em despesas:</span>
-                    <span className="font-bold text-lg sm:text-xl text-blue-700 dark:text-blue-400">
-                      {formatMoney(expenses.reduce((sum, exp) => sum + exp.amount_cents, 0))}
+            {/* Resumo do Mês - Versão Mobile Compacta (sm:hidden) */}
+            <div className="sm:hidden mb-4">
+              <div className="grid grid-cols-2 gap-2">
+                {/* Total */}
+                <div className="p-2.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 shadow-xs">
+                  <span className="text-[10px] font-bold text-blue-900/70 dark:text-blue-300/70 uppercase tracking-wider block">
+                    Total
+                  </span>
+                  <span className="text-base font-bold text-blue-700 dark:text-blue-400 block truncate mt-0.5">
+                    {formatMoney(totalExpenses)}
+                  </span>
+                </div>
+
+                {/* Por Pagar */}
+                <div className="p-2.5 rounded-xl bg-red-50/80 dark:bg-red-950/40 border border-red-200/80 dark:border-red-900/60 shadow-xs">
+                  <span className="text-[10px] font-bold text-red-900/70 dark:text-red-300/70 uppercase tracking-wider block">
+                    Por Pagar
+                  </span>
+                  <span className="text-base font-bold text-red-600 dark:text-red-400 block truncate mt-0.5">
+                    {formatMoney(totalUnpaid)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Botão retrátil para Prazos dia 1 e 20 */}
+              <button
+                type="button"
+                onClick={() => setShowDeadlines(!showDeadlines)}
+                className="w-full mt-2 flex items-center justify-between px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 transition-colors shadow-xs"
+              >
+                <span className="font-medium flex items-center gap-1.5 text-[11px]">
+                  <span>Prazos (dia 1 e 20)</span>
+                  {!showDeadlines && totalUnpaid > 0 && (
+                    <span className="text-gray-400 dark:text-gray-500">
+                      • d1: {formatMoney(day1Info.total)}
+                    </span>
+                  )}
+                </span>
+                <span className="text-[11px] font-semibold text-primary-600 dark:text-primary-400 flex items-center gap-0.5">
+                  {showDeadlines ? 'Ocultar' : 'Ver prazos'}
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showDeadlines ? 'rotate-180' : ''}`} />
+                </span>
+              </button>
+
+              {/* Detalhe dos prazos (visível ao expandir) */}
+              {showDeadlines && (
+                <div className="grid grid-cols-2 gap-2 mt-2 animate-in fade-in duration-150">
+                  <div className="p-2 rounded-lg bg-white dark:bg-gray-900 border border-orange-200 dark:border-orange-900/60 shadow-xs">
+                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 block uppercase">
+                      Até dia 1
+                    </span>
+                    <span className="font-bold text-xs text-orange-600 dark:text-orange-400 mt-0.5 block">
+                      {formatMoney(day1Info.total)}{day1Info.hasNoValue && <span className="ml-0.5">*</span>}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center p-2 rounded-lg bg-white/60 dark:bg-gray-900/40">
-                    <span className="text-gray-700 dark:text-gray-300 text-sm sm:text-base">Total não pago:</span>
-                    <span className="font-bold text-lg sm:text-xl text-red-600 dark:text-red-400">
-                      {formatMoney(expenses.filter(exp => !exp.paid).reduce((sum, exp) => sum + exp.amount_cents, 0))}
+                  <div className="p-2 rounded-lg bg-white dark:bg-gray-900 border border-orange-200 dark:border-orange-900/60 shadow-xs">
+                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 block uppercase">
+                      Até dia 20
                     </span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 rounded-lg bg-white/60 dark:bg-gray-900/40">
-                    <span className="text-gray-700 dark:text-gray-300 text-sm sm:text-base">Falta pagar até dia 1:</span>
-                    <span className="font-bold text-lg sm:text-xl text-orange-600 dark:text-orange-400">
-                      {(() => {
-                        const day1Expenses = expenses.filter(exp => {
-                          if (exp.paid) return false;
-                          const expDate = new Date(exp.debit_date);
-                          const deadline = getPaymentDeadlines(currentMonth).day1;
-                          const period = financialPeriod(currentMonth);
-                          const isInPeriod = expDate >= period.start && expDate <= period.end;
-                          return isInPeriod && expDate <= deadline;
-                        });
-                        const total = day1Expenses.reduce((sum, exp) => sum + exp.amount_cents, 0);
-                        const hasNoValueExpenses = day1Expenses.some(exp => exp.amount_cents === 0 && exp.fixed_amount === 0);
-                        return (
-                          <>
-                            {formatMoney(total)}
-                            {hasNoValueExpenses && <span className="text-orange-600 dark:text-orange-400 ml-1">*</span>}
-                          </>
-                        );
-                      })()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 rounded-lg bg-white/60 dark:bg-gray-900/40">
-                    <span className="text-gray-700 dark:text-gray-300 text-sm sm:text-base">Falta pagar até dia 20:</span>
-                    <span className="font-bold text-lg sm:text-xl text-orange-600 dark:text-orange-400">
-                      {(() => {
-                        const day20Expenses = expenses.filter(exp => {
-                          if (exp.paid) return false;
-                          const expDate = new Date(exp.debit_date);
-                          const deadline = getPaymentDeadlines(currentMonth).day20;
-                          const period = financialPeriod(currentMonth);
-                          const isInPeriod = expDate >= period.start && expDate <= period.end;
-                          return isInPeriod && expDate <= deadline;
-                        });
-                        const total = day20Expenses.reduce((sum, exp) => sum + exp.amount_cents, 0);
-                        const hasNoValueExpenses = day20Expenses.some(exp => exp.amount_cents === 0 && exp.fixed_amount === 0);
-                        return (
-                          <>
-                            {formatMoney(total)}
-                            {hasNoValueExpenses && <span className="text-orange-600 dark:text-orange-400 ml-1">*</span>}
-                          </>
-                        );
-                      })()}
+                    <span className="font-bold text-xs text-orange-600 dark:text-orange-400 mt-0.5 block">
+                      {formatMoney(day20Info.total)}{day20Info.hasNoValue && <span className="ml-0.5">*</span>}
                     </span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              )}
+            </div>
+
+            {/* Resumo do Mês - Versão Desktop e Tablet (hidden sm:block) */}
+            <div className="hidden sm:block">
+              <Card className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border-blue-200 dark:border-blue-900/60">
+                <CardContent className="p-5">
+                  <h3 className="text-base font-semibold mb-3 text-blue-900 dark:text-blue-200">Resumo do Mês</h3>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="p-3 rounded-xl bg-white/70 dark:bg-gray-900/50 border border-blue-100 dark:border-blue-900/40">
+                      <span className="text-xs text-gray-600 dark:text-gray-400 block mb-1">Total em despesas</span>
+                      <span className="font-bold text-xl text-blue-700 dark:text-blue-400 block">
+                        {formatMoney(totalExpenses)}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-white/70 dark:bg-gray-900/50 border border-red-100 dark:border-red-900/40">
+                      <span className="text-xs text-gray-600 dark:text-gray-400 block mb-1">Total não pago</span>
+                      <span className="font-bold text-xl text-red-600 dark:text-red-400 block">
+                        {formatMoney(totalUnpaid)}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-white/70 dark:bg-gray-900/50 border border-orange-100 dark:border-orange-900/40">
+                      <span className="text-xs text-gray-600 dark:text-gray-400 block mb-1">Falta pagar até dia 1</span>
+                      <span className="font-bold text-xl text-orange-600 dark:text-orange-400 block">
+                        {formatMoney(day1Info.total)}{day1Info.hasNoValue && <span className="ml-0.5">*</span>}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-white/70 dark:bg-gray-900/50 border border-orange-100 dark:border-orange-900/40">
+                      <span className="text-xs text-gray-600 dark:text-gray-400 block mb-1">Falta pagar até dia 20</span>
+                      <span className="font-bold text-xl text-orange-600 dark:text-orange-400 block">
+                        {formatMoney(day20Info.total)}{day20Info.hasNoValue && <span className="ml-0.5">*</span>}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Alerta de Despesas Sem Valor */}
             {(() => {
@@ -676,21 +744,15 @@ export default function HomePage() {
         )}
 
         {activeTab === 'shares' && (
-          <div className="h-[calc(100vh-12rem)] overflow-y-auto">
-            <SharesScreen />
-          </div>
+          <SharesScreen />
         )}
 
         {activeTab === 'settings' && (
-          <div className="h-[calc(100vh-12rem)] overflow-y-auto">
-            <SettingsScreen />
-          </div>
+          <SettingsScreen />
         )}
 
         {activeTab === 'admin' && (
-          <div className="h-[calc(100vh-12rem)] overflow-y-auto">
-            <AdminPanel />
-          </div>
+          <AdminPanel />
         )}
       </main>
 
