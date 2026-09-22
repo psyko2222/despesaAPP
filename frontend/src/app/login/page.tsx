@@ -90,19 +90,19 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-950 dark:to-gray-900 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="flex justify-center mb-4">
             <img src="/icon-192.png" alt="Despesas" className="w-16 h-16 rounded-lg" />
           </div>
-          <CardTitle className="text-3xl text-center text-primary-600">
+          <CardTitle className="text-3xl text-center text-primary-600 dark:text-primary-400">
             {mode === 'login' ? 'Entrar' :
              mode === 'register' ? 'Registar' :
              mode === 'forgot' ? 'Pedir Reset de Password' :
              'Redefinir Password'}
           </CardTitle>
-          <p className="text-center text-gray-600 mt-2">
+          <p className="text-center text-gray-600 dark:text-gray-400 mt-2">
             {mode === 'login' ? 'Bem-vindo de volta!' :
              mode === 'register' ? 'Crie a sua conta' :
              mode === 'forgot' ? 'Introduza o seu email para pedir reset' :
@@ -113,7 +113,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode !== 'reset' && (
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Email
                 </label>
                 <Input
@@ -128,7 +128,7 @@ export default function LoginPage() {
             )}
             {mode === 'reset' && (
               <div>
-                <label htmlFor="resetEmail" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="resetEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Email
                 </label>
                 <Input
@@ -144,7 +144,7 @@ export default function LoginPage() {
             {mode !== 'forgot' && mode !== 'reset' && (
               <>
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Password
                   </label>
                   <Input
@@ -166,14 +166,14 @@ export default function LoginPage() {
                       onChange={(e) => setRememberMe(e.target.checked)}
                       className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                     />
-                    <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700">
+                    <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
                       Permanecer logado (180 dias)
                     </label>
                   </div>
                 )}
                 {mode === 'register' && (
                   <div>
-                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Confirmar Password
                     </label>
                     <Input
@@ -192,7 +192,7 @@ export default function LoginPage() {
             {mode === 'reset' && (
               <>
                 <div>
-                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Nova Password
                   </label>
                   <Input
@@ -206,7 +206,7 @@ export default function LoginPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="resetConfirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="resetConfirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Confirmar Nova Password
                   </label>
                   <Input
@@ -340,7 +340,7 @@ export default function LoginPage() {
           </div>
         </CardContent>
       </Card>
-      <p className="mt-4 text-center text-xs text-gray-400 select-none">
+      <p className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500 select-none">
         Publicação: {process.env.NEXT_PUBLIC_BUILD_TIME || 'Desenvolvimento'}
       </p>
     </div>
