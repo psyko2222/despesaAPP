@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { Home, Repeat, BarChart3, Settings, Users, Plus, Trash2, Edit, CheckCircle2, Circle, Search, Calendar, AlertTriangle, X } from 'lucide-react';
@@ -42,6 +42,24 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
+
+  // Despesas filtradas por estado e pesquisa de texto
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter((expense) => {
+      // 1. Filtrar por estado
+      if (filterStatus === 'unpaid' && expense.paid) return false;
+      if (filterStatus === 'paid' && !expense.paid) return false;
+      if (filterStatus === 'no_value' && (expense.amount_cents !== 0 && expense.amount_cents !== null)) return false;
+
+      // 2. Filtrar por pesquisa de texto
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        return expense.description.toLowerCase().includes(query);
+      }
+
+      return true;
+    });
+  }, [expenses, filterStatus, searchQuery]);
 
   // Load saved account selection from localStorage
   useEffect(() => {
