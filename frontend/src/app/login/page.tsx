@@ -340,6 +340,9 @@ export default function LoginPage() {
           </div>
         </CardContent>
       </Card>
+      <p className="mt-4 text-center text-xs text-gray-400 select-none">
+        Publicação: {process.env.NEXT_PUBLIC_BUILD_TIME || 'Desenvolvimento'}
+      </p>
     </div>
   );
 }

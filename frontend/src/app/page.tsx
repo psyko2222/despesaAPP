@@ -528,6 +528,11 @@ export default function HomePage() {
         )}
       </main>
 
+      {/* Footer com data e hora de publicação */}
+      <footer className="py-4 text-center text-xs text-gray-400 select-none">
+        Publicação: {process.env.NEXT_PUBLIC_BUILD_TIME || 'Desenvolvimento'}
+      </footer>
+
       {/* Expense Form Modal */}
       {showForm && (
         <ExpenseForm
