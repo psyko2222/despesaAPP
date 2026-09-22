@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { settingsAPI, backupAPI, authAPI, adminAPI } from '@/lib/api';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useToast } from '@/components/ui/toast';
-import { Bell, BellOff, CheckCircle2, AlertCircle, Send, Loader2, Sun, Moon, Monitor, Sliders, Database, Lock, Trash2, Download, Laptop } from 'lucide-react';
+import { Bell, BellOff, CheckCircle2, AlertCircle, Send, Loader2, Sun, Moon, Monitor, Sliders, Database, Lock, Trash2, Download, Laptop, BookOpen } from 'lucide-react';
+import { InstallGuideModal } from '@/components/InstallGuideModal';
 import { Settings } from '@/types';
 
 const SETTINGS_TABS = [
@@ -55,6 +56,7 @@ export function SettingsScreen() {
   // PWA install prompt
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [showGuideModal, setShowGuideModal] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -698,42 +700,51 @@ export function SettingsScreen() {
             <div className="pt-4 border-t border-gray-200 dark:border-gray-800 space-y-3">
               <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
                 <Laptop className="w-4 h-4 text-primary-600 dark:text-primary-400" />
-                <span>Instalar no Computador ou Telemóvel</span>
+                <span>Instalação no Computador ou Telemóvel</span>
               </label>
               {isStandalone ? (
-                <div className="flex items-center gap-2.5 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-emerald-800 dark:text-emerald-300 text-xs sm:text-sm">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-                  <span>A aplicação já se encontra instalada e a correr como app autónoma neste dispositivo!</span>
+                <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg space-y-2.5">
+                  <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 text-xs sm:text-sm font-semibold">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                    <span>A aplicação já se encontra instalada e a correr como app autónoma!</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowGuideModal(true)}
+                    className="flex items-center gap-2 text-xs h-8"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Ver Instruções de Instalação para outros aparelhos</span>
+                  </Button>
                 </div>
               ) : (
                 <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3">
                   <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                     Pode instalar esta aplicação no seu <strong>PC (Windows/Mac)</strong> ou <strong>Telemóvel (Android/iPhone)</strong> para que abra numa janela própria, sem a barra do navegador, com o seu próprio ícone no ambiente de trabalho ou menu iniciar.
                   </p>
-                  {installPrompt ? (
+                  
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {installPrompt && (
+                      <Button
+                        type="button"
+                        onClick={handleInstallApp}
+                        className="flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 text-xs sm:text-sm"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Instalar Agora</span>
+                      </Button>
+                    )}
                     <Button
                       type="button"
-                      onClick={handleInstallApp}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700"
+                      variant="outline"
+                      onClick={() => setShowGuideModal(true)}
+                      className="flex items-center justify-center gap-2 text-xs sm:text-sm"
                     >
-                      <Download className="w-4 h-4" />
-                      <span>Instalar Aplicação Agora</span>
+                      <BookOpen className="w-4 h-4" />
+                      <span>Instruções de Instalação</span>
                     </Button>
-                  ) : (
-                    <div className="text-xs text-primary-800 dark:text-primary-300 bg-primary-50 dark:bg-primary-950/40 p-3 rounded-lg border border-primary-200 dark:border-primary-800/80 space-y-1.5">
-                      <p className="font-semibold flex items-center gap-1.5">
-                        <span>💡 Como instalar diretamente no Google Chrome / Edge no PC:</span>
-                      </p>
-                      <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300 pl-1">
-                        <li>
-                          No canto superior direito da barra de endereço (onde está o link do site), clique no ícone de <strong>instalar (um ecrã de computador com uma seta para baixo)</strong>.
-                        </li>
-                        <li>
-                          Ou clique no menu dos 3 pontos do Chrome (<strong>⋮</strong>) &gt; <strong>Guardar e partilhar</strong> &gt; <strong>Instalar Despesas...</strong>
-                        </li>
-                      </ul>
-                    </div>
-                  )}
+                  </div>
                 </div>
               )}
             </div>
@@ -937,6 +948,14 @@ export function SettingsScreen() {
           Publicação: {process.env.NEXT_PUBLIC_BUILD_TIME || 'Desenvolvimento'}
         </p>
       </div>
+
+      {/* Modal com Instruções de Instalação */}
+      <InstallGuideModal
+        isOpen={showGuideModal}
+        onClose={() => setShowGuideModal(false)}
+        onInstall={handleInstallApp}
+        canInstallDirectly={!!installPrompt}
+      />
     </div>
   );
 }

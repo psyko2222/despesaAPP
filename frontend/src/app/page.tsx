@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/toast';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { BottomNav, Tab } from '@/components/BottomNav';
 import { MonthPickerModal } from '@/components/MonthPickerModal';
+import { InstallGuideModal } from '@/components/InstallGuideModal';
 import { formatMoney, formatDate, currentFinancialPeriodMonth, getNextMonth, getPreviousMonth, getFinancialPeriodDisplay, recurrenceLabel, getPaymentDeadlines, financialPeriod, formatAmount } from '@/lib/utils';
 import { expensesAPI, sharesAPI } from '@/lib/api';
 import { Expense, AccountShare } from '@/types';
@@ -43,6 +44,10 @@ export default function HomePage() {
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
   const [showDeadlines, setShowDeadlines] = useState(false);
+
+  // Onboarding de Instalação (PWA)
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
 
   // Totais e prazos calculados de forma reativa
   const totalExpenses = useMemo(() => expenses.reduce((sum, exp) => sum + exp.amount_cents, 0), [expenses]);
@@ -142,6 +147,50 @@ export default function HomePage() {
       loadSharedAccounts();
     }
   }, [user, currentMonth, selectedAccount]);
+
+  // Onboarding: popup de instalação no primeiro login
+  useEffect(() => {
+    if (user && typeof window !== 'undefined') {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      const hasSeen = localStorage.getItem('has_seen_install_guide');
+      if (!hasSeen && !isStandalone) {
+        const timer = setTimeout(() => {
+          setShowInstallGuide(true);
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user]);
+
+  // Capturar evento de instalação nativa do browser (PWA)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleBeforeInstall = (e: any) => {
+        e.preventDefault();
+        setInstallPrompt(e);
+      };
+      window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+      return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    }
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!installPrompt) return;
+    try {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        setInstallPrompt(null);
+        setShowInstallGuide(false);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('has_seen_install_guide', 'true');
+        }
+        toast.success('Aplicação instalada com sucesso!');
+      }
+    } catch (err) {
+      console.error('Falha ao acionar instalação:', err);
+    }
+  };
 
   const loadExpenses = async () => {
     setLoadingExpenses(true);
@@ -882,6 +931,14 @@ export default function HomePage() {
         setActiveTab={setActiveTab}
         pendingInvitations={pendingInvitations}
         isAdmin={user?.role === 'admin'}
+      />
+
+      {/* Modal de Instruções de Instalação (PWA) */}
+      <InstallGuideModal
+        isOpen={showInstallGuide}
+        onClose={() => setShowInstallGuide(false)}
+        onInstall={handleInstallApp}
+        canInstallDirectly={!!installPrompt}
       />
     </div>
   );
