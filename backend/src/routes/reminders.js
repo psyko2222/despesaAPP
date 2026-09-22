@@ -95,8 +95,40 @@ async function processDebitReminders() {
 
     const totalCents = expenses.reduce((sum, e) => sum + (e.amount_cents || 0), 0);
     const totalEur = (totalCents / 100).toFixed(2);
-    const daysLabel = daysBefore === 0 ? 'hoje' : daysBefore === 1 ? 'amanhã' : `em ${daysBefore} dias`;
-    const countLabel = expenses.length === 1 ? '1 despesa' : `${expenses.length} despesas`;
+
+    // Formatar a data para estilo português (DD/MM)
+    const [tYear, tMonth, tDay] = targetDateStr.split('-');
+    const formattedDate = `${tDay}/${tMonth}`;
+
+    let notificationTitle = '';
+    let notificationBody = '';
+
+    if (expenses.length === 1) {
+      const exp = expenses[0];
+      const valStr = exp.amount_cents > 0 ? ` (${(exp.amount_cents / 100).toFixed(2)}€)` : '';
+      if (daysBefore === 0) {
+        notificationTitle = '⚠️ Atenção: Débito Agendado para Hoje';
+        notificationBody = `A despesa "${exp.description}"${valStr} irá ser debitada hoje!`;
+      } else if (daysBefore === 1) {
+        notificationTitle = '⚠️ Atenção: Débito Agendado para Amanhã';
+        notificationBody = `A despesa "${exp.description}"${valStr} irá ser debitada amanhã (dia ${formattedDate}).`;
+      } else {
+        notificationTitle = `⚠️ Atenção: Débito em ${daysBefore} dias`;
+        notificationBody = `A despesa "${exp.description}"${valStr} irá ser debitada no dia ${formattedDate}.`;
+      }
+    } else {
+      const names = expenses.map(e => e.description).slice(0, 3).join(', ') + (expenses.length > 3 ? '...' : '');
+      if (daysBefore === 0) {
+        notificationTitle = `⚠️ Atenção: ${expenses.length} Despesas a Debitar Hoje`;
+        notificationBody = `As despesas (${names}) num total de ${totalEur}€ irão ser debitadas hoje!`;
+      } else if (daysBefore === 1) {
+        notificationTitle = `⚠️ Atenção: ${expenses.length} Despesas a Debitar Amanhã`;
+        notificationBody = `As despesas (${names}) num total de ${totalEur}€ irão ser debitadas amanhã (dia ${formattedDate}).`;
+      } else {
+        notificationTitle = `⚠️ Atenção: ${expenses.length} Despesas em ${daysBefore} dias`;
+        notificationBody = `As despesas (${names}) num total de ${totalEur}€ irão ser debitadas no dia ${formattedDate}.`;
+      }
+    }
 
     // 3. Obter subscrições Web Push do utilizador
     const subsSql = isPostgres
@@ -110,9 +142,10 @@ async function processDebitReminders() {
     if (subscriptions && subscriptions.length > 0) {
       for (const sub of subscriptions) {
         const sendRes = await webPushService.sendPushNotification(sub, {
-          title: `⚠️ Lembrete: ${countLabel} a debitar ${daysLabel}`,
-          body: `Total de ${totalEur}€ (${expenses.map(e => e.description).slice(0, 2).join(', ')}${expenses.length > 2 ? '...' : ''}).`,
+          title: notificationTitle,
+          body: notificationBody,
           icon: '/icon-192.png',
+          badge: '/icon-192.png',
           url: '/'
         });
 

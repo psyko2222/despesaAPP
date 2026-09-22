@@ -97,9 +97,10 @@ router.post('/test', authenticateToken, async (req, res) => {
 
     for (const sub of subscriptions) {
       const result = await webPushService.sendPushNotification(sub, {
-        title: '🔔 Despesas - Notificação de Teste',
-        body: 'As notificações estão ativas e a funcionar perfeitamente neste dispositivo!',
+        title: '⚠️ Atenção: Notificação de Teste',
+        body: 'A despesa "Exemplo" (15.50€) irá ser debitada no dia 25/09.',
         icon: '/icon-192.png',
+        badge: '/icon-192.png',
         url: '/'
       });
 
