@@ -45,6 +45,8 @@ export interface Settings {
   second_debit_reminder_enabled?: number;
   second_debit_reminder_days?: number;
   same_day_reminder_enabled?: number;
+  no_value_reminder_enabled?: number;
+  no_value_reminder_days?: string;
 }
 
 export interface AuthResponse {

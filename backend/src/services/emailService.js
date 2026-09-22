@@ -238,9 +238,77 @@ ${frontendUrl}
   });
 }
 
+async function sendNoValueExpensesEmail(email, expenses) {
+  const count = expenses.length;
+  const countText = count === 1 ? '1 despesa sem valor' : `${count} despesas sem valor`;
+
+  const expenseItemsText = expenses.map(e => {
+    return `- ${e.description} (data agendada: ${e.debit_date})`;
+  }).join('\n');
+
+  const expenseItemsHtml = expenses.map(e => {
+    return `
+      <tr style="border-bottom: 1px solid #e5e7eb;">
+        <td style="padding: 10px 8px; font-weight: 500; color: #1f2937;">${e.description}</td>
+        <td style="padding: 10px 8px; text-align: right; font-weight: 600; color: #ea580c;">Sem valor</td>
+        <td style="padding: 10px 8px; text-align: right; color: #6b7280; font-size: 13px;">${e.debit_date}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const frontendUrl = (process.env.FRONTEND_URL || 'https://despesa-app.vercel.app').replace(/\/+$/, '');
+
+  return sendMail({
+    to: email,
+    subject: `⚠️ Atenção: Por favor verifique despesas sem valor (${countText}) - Despesas`,
+    text: `
+Olá,
+
+Tens ${countText} que ainda não têm o valor definido:
+
+${expenseItemsText}
+
+Por favor abre a aplicação para definir os respetivos valores:
+${frontendUrl}
+    `.trim(),
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #ea580c; margin: 0;">⚠️ Atenção: Despesas Sem Valor</h2>
+          <p style="color: #4b5563; margin-top: 6px;">Por favor verifica as <strong>${countText}</strong> identificadas no período atual.</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <thead>
+            <tr style="background-color: #fff7ed; text-align: left; font-size: 13px; color: #9a3412;">
+              <th style="padding: 8px;">Descrição</th>
+              <th style="padding: 8px; text-align: right;">Estado</th>
+              <th style="padding: 8px; text-align: right;">Data Débito</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${expenseItemsHtml}
+          </tbody>
+        </table>
+
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${frontendUrl}" style="display: inline-block; padding: 12px 28px; background-color: #ea580c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">
+            Atualizar Valores na Aplicação
+          </a>
+        </div>
+
+        <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 24px;">
+          Este é um alerta automático gerado de acordo com as tuas definições de lembretes nos dias 1, 10, 15 ou 20.
+        </p>
+      </div>
+    `
+  });
+}
+
 module.exports = {
   isEmailConfigured,
   sendPasswordResetEmail,
   sendUserApprovalNotification,
-  sendDebitReminderEmail
+  sendDebitReminderEmail,
+  sendNoValueExpensesEmail
 };

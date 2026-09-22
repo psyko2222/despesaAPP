@@ -50,8 +50,16 @@ export function SettingsScreen() {
     try {
       const response = await settingsAPI.get();
       const data = response.data;
-      if (data && data.same_day_reminder_enabled === undefined) {
-        data.same_day_reminder_enabled = 1;
+      if (data) {
+        if (data.same_day_reminder_enabled === undefined) {
+          data.same_day_reminder_enabled = 1;
+        }
+        if (data.no_value_reminder_enabled === undefined) {
+          data.no_value_reminder_enabled = 0;
+        }
+        if (!data.no_value_reminder_days) {
+          data.no_value_reminder_days = '1,10,15,20';
+        }
       }
       setSettings(data);
       if (response.data.auto_cleanup_years) {
@@ -71,7 +79,8 @@ export function SettingsScreen() {
       const anyReminderActive =
         (settings.debit_notifications_enabled === 1) ||
         (settings.second_debit_reminder_enabled === 1) ||
-        ((settings.same_day_reminder_enabled ?? 1) === 1);
+        ((settings.same_day_reminder_enabled ?? 1) === 1) ||
+        (settings.no_value_reminder_enabled === 1);
 
       await settingsAPI.update({
         ...settings,
@@ -445,6 +454,77 @@ export function SettingsScreen() {
                 <p className="text-xs text-gray-500 pl-6">
                   Alerta às 10:00 se houver despesas agendadas para hoje que ainda não tenham sido marcadas como pagas.
                 </p>
+              </div>
+
+              {/* 4º Lembrete de Despesas Sem Valor */}
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-gray-800 font-medium cursor-pointer flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={settings.no_value_reminder_enabled === 1}
+                      onChange={(e) => setSettings({ ...settings, no_value_reminder_enabled: e.target.checked ? 1 : 0 })}
+                      className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
+                    />
+                    <span>Verificar despesas sem valor</span>
+                  </label>
+                  {settings.no_value_reminder_enabled === 1 ? (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Ativo</span>
+                  ) : (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 text-gray-600">Inativo</span>
+                  )}
+                </div>
+
+                <p className="text-xs text-gray-500 pl-6">
+                  Dispara às 10:00 nos dias selecionados apenas se existirem despesas sem valor por preencher.
+                </p>
+
+                {settings.no_value_reminder_enabled === 1 && (
+                  <div className="pt-2 pl-6 space-y-2">
+                    <span className="text-xs font-medium text-gray-700 block">
+                      Disparar nos seguintes dias do mês:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {['1', '10', '15', '20'].map((day) => {
+                        const currentDaysList = (settings.no_value_reminder_days || '1,10,15,20')
+                          .split(',')
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                        const isChecked = currentDaysList.includes(day);
+
+                        return (
+                          <label
+                            key={day}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs sm:text-sm font-medium cursor-pointer transition-colors ${
+                              isChecked
+                                ? 'bg-primary-50 border-primary-300 text-primary-800'
+                                : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                let updated: string[];
+                                if (isChecked) {
+                                  updated = currentDaysList.filter((d) => d !== day);
+                                } else {
+                                  updated = [...currentDaysList, day].sort((a, b) => parseInt(a) - parseInt(b));
+                                }
+                                setSettings({
+                                  ...settings,
+                                  no_value_reminder_days: updated.join(',')
+                                });
+                              }}
+                              className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
+                            />
+                            <span>Dia {day}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-xs leading-relaxed">
