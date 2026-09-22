@@ -57,7 +57,8 @@ async function processDebitReminders() {
   const results = [];
 
   for (const user of users) {
-    const daysBefore = parseInt(user.debit_reminder_days) || 1;
+    const parsedDays = parseInt(user.debit_reminder_days);
+    const daysBefore = isNaN(parsedDays) ? 1 : parsedDays;
 
     // Calcular a data alvo de vencimento
     const targetDate = new Date();
