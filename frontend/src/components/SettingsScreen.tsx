@@ -341,12 +341,15 @@ export function SettingsScreen() {
               </div>
 
               <div>
-                <label className="block text-gray-700 mb-1 font-medium">Avisar com antecedência de:</label>
+                <label className="block text-gray-700 mb-1 font-medium">1º Lembrete:</label>
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
                     value={settings.debit_reminder_days}
-                    onChange={(e) => setSettings({ ...settings, debit_reminder_days: parseInt(e.target.value) || 0 })}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      setSettings({ ...settings, debit_reminder_days: isNaN(v) ? 0 : v });
+                    }}
                     min="0"
                     max="30"
                     className="w-24"
@@ -355,6 +358,48 @@ export function SettingsScreen() {
                     {settings.debit_reminder_days === 0 ? 'dia(s) (no próprio dia do débito)' : settings.debit_reminder_days === 1 ? 'dia (na véspera)' : 'dias antes'}
                   </span>
                 </div>
+              </div>
+
+              <div className="pt-3 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <label className="text-gray-700 font-medium block">Ativar 2º lembrete</label>
+                    <span className="text-xs text-gray-500">Ex: 1º lembrete 2 dias antes e 2º no próprio dia</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={settings.second_debit_reminder_enabled === 1}
+                    onChange={(e) => {
+                      setSettings({
+                        ...settings,
+                        second_debit_reminder_enabled: e.target.checked ? 1 : 0
+                      });
+                    }}
+                    className="w-5 h-5 rounded text-primary-600 focus:ring-primary-500"
+                  />
+                </div>
+
+                {settings.second_debit_reminder_enabled === 1 && (
+                  <div className="mt-2 pl-2 border-l-2 border-primary-200">
+                    <label className="block text-gray-700 mb-1 text-sm font-medium">Antecedência do 2º lembrete:</label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        value={settings.second_debit_reminder_days ?? 0}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value);
+                          setSettings({ ...settings, second_debit_reminder_days: isNaN(v) ? 0 : v });
+                        }}
+                        min="0"
+                        max="30"
+                        className="w-24"
+                      />
+                      <span className="text-gray-600 text-sm">
+                        {(settings.second_debit_reminder_days ?? 0) === 0 ? 'dia(s) (no próprio dia do débito)' : (settings.second_debit_reminder_days ?? 0) === 1 ? 'dia (na véspera)' : 'dias antes'}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-xs leading-relaxed">

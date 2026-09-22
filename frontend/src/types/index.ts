@@ -42,6 +42,8 @@ export interface Settings {
   terms_accepted_version: number;
   terms_accepted_at?: string;
   auto_cleanup_years?: number;
+  second_debit_reminder_enabled?: number;
+  second_debit_reminder_days?: number;
 }
 
 export interface AuthResponse {

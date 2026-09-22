@@ -69,7 +69,9 @@ router.put('/', authenticateToken, async (req, res) => {
       terms_accepted_version,
       terms_accepted_at,
       auto_cleanup_years,
-      stats_comparison
+      stats_comparison,
+      second_debit_reminder_enabled,
+      second_debit_reminder_days
     } = req.body;
 
     // Build dynamic update query to handle undefined values
@@ -88,6 +90,14 @@ router.put('/', authenticateToken, async (req, res) => {
     if (debit_reminder_days !== undefined) {
       updates.push(isPostgres ? `debit_reminder_days = $${paramIndex++}` : `debit_reminder_days = ?`);
       params.push(debit_reminder_days);
+    }
+    if (second_debit_reminder_enabled !== undefined) {
+      updates.push(isPostgres ? `second_debit_reminder_enabled = $${paramIndex++}` : `second_debit_reminder_enabled = ?`);
+      params.push(second_debit_reminder_enabled ? 1 : 0);
+    }
+    if (second_debit_reminder_days !== undefined) {
+      updates.push(isPostgres ? `second_debit_reminder_days = $${paramIndex++}` : `second_debit_reminder_days = ?`);
+      params.push(second_debit_reminder_days);
     }
     if (debit_reminder_hour !== undefined) {
       updates.push(isPostgres ? `debit_reminder_hour = $${paramIndex++}` : `debit_reminder_hour = ?`);
@@ -193,7 +203,8 @@ router.patch('/:key', authenticateToken, async (req, res) => {
       'debit_reminder_hour', 'debit_reminder_minute', 'variable_reminder_enabled',
       'variable_reminder_day', 'variable_reminder_hour', 'variable_reminder_minute',
       'variable_snooze_minutes', 'tolerance', 'stats_window_months',
-      'terms_accepted_version', 'terms_accepted_at', 'auto_cleanup_years'
+      'terms_accepted_version', 'terms_accepted_at', 'auto_cleanup_years',
+      'second_debit_reminder_enabled', 'second_debit_reminder_days'
     ];
 
     if (!validKeys.includes(key)) {

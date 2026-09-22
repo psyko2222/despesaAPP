@@ -76,6 +76,8 @@ async function initializeDatabase() {
         stats_comparison TEXT DEFAULT 'WINDOW_AVERAGE',
         variable_reminder_time INTEGER DEFAULT 0,
         variable_reminder_scheduled INTEGER DEFAULT 0,
+        second_debit_reminder_enabled INTEGER DEFAULT 0,
+        second_debit_reminder_days INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
 
@@ -164,6 +166,8 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_error_logs_user ON error_logs(user_id);
       CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at);
     `);
+    try { db.exec('ALTER TABLE settings ADD COLUMN second_debit_reminder_enabled INTEGER DEFAULT 0'); } catch (e) {}
+    try { db.exec('ALTER TABLE settings ADD COLUMN second_debit_reminder_days INTEGER DEFAULT 0'); } catch (e) {}
     console.log('SQLite Database initialized successfully');
     return;
   }
@@ -223,7 +227,9 @@ async function initializeDatabase() {
         auto_cleanup_years INTEGER DEFAULT 0,
         stats_comparison VARCHAR(50) DEFAULT 'WINDOW_AVERAGE',
         variable_reminder_time INTEGER DEFAULT 0,
-        variable_reminder_scheduled INTEGER DEFAULT 0
+        variable_reminder_scheduled INTEGER DEFAULT 0,
+        second_debit_reminder_enabled INTEGER DEFAULT 0,
+        second_debit_reminder_days INTEGER DEFAULT 0
       );
 
       CREATE TABLE IF NOT EXISTS account_shares (
@@ -302,6 +308,9 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_error_logs_level ON error_logs(level);
       CREATE INDEX IF NOT EXISTS idx_error_logs_user ON error_logs(user_id);
       CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at);
+
+      ALTER TABLE settings ADD COLUMN IF NOT EXISTS second_debit_reminder_enabled INTEGER DEFAULT 0;
+      ALTER TABLE settings ADD COLUMN IF NOT EXISTS second_debit_reminder_days INTEGER DEFAULT 0;
     `);
 
     await client.query('COMMIT');

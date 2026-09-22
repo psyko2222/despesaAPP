@@ -42,11 +42,17 @@ async function processDebitReminders() {
 
   // 1. Obter utilizadores aprovados com notificações ativas
   const usersSql = isPostgres
-    ? `SELECT u.id, u.email, COALESCE(s.debit_reminder_days, 1) as debit_reminder_days
+    ? `SELECT u.id, u.email,
+              COALESCE(s.debit_reminder_days, 1) as debit_reminder_days,
+              COALESCE(s.second_debit_reminder_enabled, 0) as second_debit_reminder_enabled,
+              COALESCE(s.second_debit_reminder_days, 0) as second_debit_reminder_days
        FROM users u
        JOIN settings s ON u.id = s.user_id
        WHERE u.status = 'approved' AND (s.debit_notifications_enabled = 1 OR s.notifications_enabled = 1)`
-    : `SELECT u.id, u.email, COALESCE(s.debit_reminder_days, 1) as debit_reminder_days
+    : `SELECT u.id, u.email,
+              COALESCE(s.debit_reminder_days, 1) as debit_reminder_days,
+              COALESCE(s.second_debit_reminder_enabled, 0) as second_debit_reminder_enabled,
+              COALESCE(s.second_debit_reminder_days, 0) as second_debit_reminder_days
        FROM users u
        JOIN settings s ON u.id = s.user_id
        WHERE u.status = 'approved' AND (s.debit_notifications_enabled = 1 OR s.notifications_enabled = 1)`;
@@ -57,21 +63,31 @@ async function processDebitReminders() {
   const results = [];
 
   for (const user of users) {
-    const parsedDays = parseInt(user.debit_reminder_days);
-    const daysBefore = isNaN(parsedDays) ? 1 : parsedDays;
+    const parsedDays1 = parseInt(user.debit_reminder_days);
+    const daysBefore1 = isNaN(parsedDays1) ? 1 : parsedDays1;
+    const reminderOffsets = [daysBefore1];
 
-    // Calcular a data alvo de vencimento
-    const targetDate = new Date();
-    targetDate.setDate(targetDate.getDate() + daysBefore);
-    const targetDateStr = targetDate.toISOString().split('T')[0];
+    if (user.second_debit_reminder_enabled === 1) {
+      const parsedDays2 = parseInt(user.second_debit_reminder_days);
+      const daysBefore2 = isNaN(parsedDays2) ? 0 : parsedDays2;
+      if (!reminderOffsets.includes(daysBefore2)) {
+        reminderOffsets.push(daysBefore2);
+      }
+    }
 
-    // 2. Buscar despesas não pagas dessa data
-    const expensesSql = isPostgres
-      ? 'SELECT * FROM expenses WHERE user_id = $1 AND debit_date = $2 AND paid = 0 ORDER BY debit_date'
-      : 'SELECT * FROM expenses WHERE user_id = ? AND debit_date = ? AND paid = 0 ORDER BY debit_date';
+    for (const daysBefore of reminderOffsets) {
+      // Calcular a data alvo de vencimento
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + daysBefore);
+      const targetDateStr = targetDate.toISOString().split('T')[0];
 
-    const expensesResult = await query(expensesSql, [user.id, targetDateStr]);
-    const expenses = isPostgres ? expensesResult.rows : expensesResult;
+      // 2. Buscar despesas não pagas dessa data
+      const expensesSql = isPostgres
+        ? 'SELECT * FROM expenses WHERE user_id = $1 AND debit_date = $2 AND paid = 0 ORDER BY debit_date'
+        : 'SELECT * FROM expenses WHERE user_id = ? AND debit_date = ? AND paid = 0 ORDER BY debit_date';
+
+      const expensesResult = await query(expensesSql, [user.id, targetDateStr]);
+      const expenses = isPostgres ? expensesResult.rows : expensesResult;
 
     if (!expenses || expenses.length === 0) {
       continue;
@@ -132,6 +148,7 @@ async function processDebitReminders() {
       pushSent,
       emailSent
     });
+    }
   }
 
   console.log('=== Lembretes processados com sucesso ===', results);
