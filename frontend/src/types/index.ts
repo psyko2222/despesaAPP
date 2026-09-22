@@ -44,6 +44,7 @@ export interface Settings {
   auto_cleanup_years?: number;
   second_debit_reminder_enabled?: number;
   second_debit_reminder_days?: number;
+  same_day_reminder_enabled?: number;
 }
 
 export interface AuthResponse {

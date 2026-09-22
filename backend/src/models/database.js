@@ -78,6 +78,7 @@ async function initializeDatabase() {
         variable_reminder_scheduled INTEGER DEFAULT 0,
         second_debit_reminder_enabled INTEGER DEFAULT 0,
         second_debit_reminder_days INTEGER DEFAULT 0,
+        same_day_reminder_enabled INTEGER DEFAULT 1,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
 
@@ -168,6 +169,7 @@ async function initializeDatabase() {
     `);
     try { db.exec('ALTER TABLE settings ADD COLUMN second_debit_reminder_enabled INTEGER DEFAULT 0'); } catch (e) {}
     try { db.exec('ALTER TABLE settings ADD COLUMN second_debit_reminder_days INTEGER DEFAULT 0'); } catch (e) {}
+    try { db.exec('ALTER TABLE settings ADD COLUMN same_day_reminder_enabled INTEGER DEFAULT 1'); } catch (e) {}
     console.log('SQLite Database initialized successfully');
     return;
   }
@@ -229,7 +231,8 @@ async function initializeDatabase() {
         variable_reminder_time INTEGER DEFAULT 0,
         variable_reminder_scheduled INTEGER DEFAULT 0,
         second_debit_reminder_enabled INTEGER DEFAULT 0,
-        second_debit_reminder_days INTEGER DEFAULT 0
+        second_debit_reminder_days INTEGER DEFAULT 0,
+        same_day_reminder_enabled INTEGER DEFAULT 1
       );
 
       CREATE TABLE IF NOT EXISTS account_shares (
@@ -311,6 +314,7 @@ async function initializeDatabase() {
 
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS second_debit_reminder_enabled INTEGER DEFAULT 0;
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS second_debit_reminder_days INTEGER DEFAULT 0;
+      ALTER TABLE settings ADD COLUMN IF NOT EXISTS same_day_reminder_enabled INTEGER DEFAULT 1;
     `);
 
     await client.query('COMMIT');
