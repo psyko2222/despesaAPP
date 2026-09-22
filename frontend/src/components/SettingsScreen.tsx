@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { settingsAPI, backupAPI, authAPI } from '@/lib/api';
+import { settingsAPI, backupAPI, authAPI, adminAPI } from '@/lib/api';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { Bell, BellOff, CheckCircle2, AlertCircle, Send, Loader2 } from 'lucide-react';
 import { Settings } from '@/types';
-import axios from 'axios';
 
 export function SettingsScreen() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -19,6 +20,20 @@ export function SettingsScreen() {
   const [cleanupStats, setCleanupStats] = useState<any>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupDeleting, setCleanupDeleting] = useState(false);
+
+  // Push notifications hook
+  const {
+    isSupported: pushSupported,
+    permission: pushPermission,
+    isSubscribed: pushSubscribed,
+    loading: pushLoading,
+    actionLoading: pushActionLoading,
+    error: pushError,
+    subscribe: subscribePush,
+    unsubscribe: unsubscribePush,
+    sendTestNotification,
+  } = usePushNotifications();
+  const [testNotificationFeedback, setTestNotificationFeedback] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -103,11 +118,7 @@ export function SettingsScreen() {
   const handleCheckCleanup = async () => {
     setCleanupLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const response = await axios.get(`${apiUrl}/api/admin/expenses/cleanup/stats?years=${cleanupYears}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await adminAPI.getCleanupStats(cleanupYears);
       setCleanupStats(response.data);
     } catch (error) {
       console.error('Failed to check cleanup stats:', error);
@@ -129,11 +140,7 @@ export function SettingsScreen() {
 
     setCleanupDeleting(true);
     try {
-      const token = localStorage.getItem('token');
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const response = await axios.delete(`${apiUrl}/api/admin/expenses/cleanup?years=${cleanupYears}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await adminAPI.cleanupExpenses(cleanupYears);
       alert(`${response.data.deletedCount} registos apagados com sucesso!`);
       setCleanupStats(null);
     } catch (error) {
@@ -210,63 +217,152 @@ export function SettingsScreen() {
 
       {/* Tab Content */}
       {activeTab === 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Notificações</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="text-gray-700">Ativar notificações</label>
-              <input
-                type="checkbox"
-                checked={settings.notifications_enabled === 1}
-                onChange={(e) => setSettings({ ...settings, notifications_enabled: e.target.checked ? 1 : 0 })}
-                className="w-5 h-5"
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-gray-700">Notificações de débito</label>
-              <input
-                type="checkbox"
-                checked={settings.debit_notifications_enabled === 1}
-                onChange={(e) => setSettings({ ...settings, debit_notifications_enabled: e.target.checked ? 1 : 0 })}
-                className="w-5 h-5"
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 mb-1">Dias antes do débito</label>
-              <Input
-                type="number"
-                value={settings.debit_reminder_days}
-                onChange={(e) => setSettings({ ...settings, debit_reminder_days: parseInt(e.target.value) || 0 })}
-                min="0"
-                max="365"
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 mb-1">Hora do lembrete</label>
-              <div className="flex space-x-2">
-                <Input
-                  type="number"
-                  value={settings.debit_reminder_hour}
-                  onChange={(e) => setSettings({ ...settings, debit_reminder_hour: parseInt(e.target.value) || 0 })}
-                  min="0"
-                  max="23"
-                  className="w-20"
-                />
-                <span className="text-gray-600 self-center">:</span>
-                <Input
-                  type="number"
-                  value={settings.debit_reminder_minute}
-                  onChange={(e) => setSettings({ ...settings, debit_reminder_minute: parseInt(e.target.value) || 0 })}
-                  min="0"
-                  max="59"
-                  className="w-20"
+        <div className="space-y-6">
+          {/* Card de Notificações Push do Dispositivo */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="w-5 h-5 text-primary-600" />
+                Notificações no Dispositivo
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Ative as notificações para receber lembretes de débito diretamente no telemóvel ou computador, mesmo com a aplicação fechada.
+              </p>
+
+              {/* Estado do Suporte e Permissão */}
+              {!pushSupported ? (
+                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>Este navegador não suporta notificações Web Push. Se estiver no iOS (iPhone), adicione primeiro o site ao ecrã inicial.</span>
+                </div>
+              ) : pushPermission === 'denied' ? (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>As notificações estão bloqueadas nas permissões do seu navegador. Ative as permissões nas definições do browser.</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    {pushSubscribed ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    ) : (
+                      <BellOff className="w-5 h-4 text-gray-400" />
+                    )}
+                    <span className="text-sm font-medium text-gray-700">
+                      {pushSubscribed ? 'Notificações ativas neste dispositivo' : 'Notificações inativas neste dispositivo'}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={pushSubscribed ? 'outline' : 'default'}
+                    size="sm"
+                    disabled={pushActionLoading}
+                    onClick={async () => {
+                      setTestNotificationFeedback(null);
+                      if (pushSubscribed) {
+                        await unsubscribePush();
+                      } else {
+                        await subscribePush();
+                      }
+                    }}
+                  >
+                    {pushActionLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : pushSubscribed ? (
+                      'Desativar'
+                    ) : (
+                      'Ativar Notificações'
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* Botão de Notificação de Teste */}
+              {pushSubscribed && (
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full flex items-center justify-center gap-2 border-primary-200 text-primary-700 hover:bg-primary-50"
+                    disabled={pushActionLoading}
+                    onClick={async () => {
+                      setTestNotificationFeedback(null);
+                      const ok = await sendTestNotification();
+                      if (ok) {
+                        setTestNotificationFeedback('Notificação de teste enviada com sucesso! Verifique a barra de notificações.');
+                      } else {
+                        setTestNotificationFeedback('Não foi possível enviar a notificação de teste.');
+                      }
+                    }}
+                  >
+                    {pushActionLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                    Enviar Notificação de Teste Agora
+                  </Button>
+                </div>
+              )}
+
+              {/* Feedback do Teste ou Erro */}
+              {testNotificationFeedback && (
+                <p className="text-xs text-center text-emerald-700 font-medium bg-emerald-50 p-2 rounded">
+                  {testNotificationFeedback}
+                </p>
+              )}
+              {pushError && (
+                <p className="text-xs text-center text-red-600 font-medium bg-red-50 p-2 rounded">
+                  {pushError}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Card de Regras de Lembrete de Débito */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Regras de Lembretes de Débito</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-gray-700 font-medium">Ativar lembretes automáticos</label>
+                <input
+                  type="checkbox"
+                  checked={settings.debit_notifications_enabled === 1 || settings.notifications_enabled === 1}
+                  onChange={(e) => {
+                    const val = e.target.checked ? 1 : 0;
+                    setSettings({ ...settings, debit_notifications_enabled: val, notifications_enabled: val });
+                  }}
+                  className="w-5 h-5 rounded text-primary-600 focus:ring-primary-500"
                 />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+
+              <div>
+                <label className="block text-gray-700 mb-1 font-medium">Avisar com antecedência de:</label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    value={settings.debit_reminder_days}
+                    onChange={(e) => setSettings({ ...settings, debit_reminder_days: parseInt(e.target.value) || 0 })}
+                    min="0"
+                    max="30"
+                    className="w-24"
+                  />
+                  <span className="text-gray-600 text-sm">
+                    {settings.debit_reminder_days === 0 ? 'dia(s) (no próprio dia do débito)' : settings.debit_reminder_days === 1 ? 'dia (na véspera)' : 'dias antes'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-xs leading-relaxed">
+                ℹ️ <strong>Horário Fixo:</strong> Os lembretes são verificados e enviados diariamente às <strong>10:00</strong> da manhã através do serviço agendado. Se houver despesas a debitar, receberá um alerta no telemóvel e um resumo por email.
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === 1 && (

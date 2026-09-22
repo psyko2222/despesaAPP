@@ -157,4 +157,35 @@ export const logsAPI = {
     api.delete<any>(`/logs/clear${olderThanDays ? `?olderThanDays=${olderThanDays}` : ''}`),
 };
 
+export const pushAPI = {
+  getPublicKey: () =>
+    api.get<{ publicKey: string; isConfigured: boolean }>('/push/public-key'),
+
+  subscribe: (subscription: { endpoint: string; keys: { p256dh: string; auth: string }; userAgent?: string }) =>
+    api.post<{ success: boolean; message: string }>('/push/subscribe', subscription),
+
+  unsubscribe: (endpoint: string) =>
+    api.delete<{ success: boolean; message: string }>('/push/unsubscribe', { data: { endpoint } }),
+
+  test: () =>
+    api.post<{ success: boolean; message: string; sentCount: number }>('/push/test'),
+
+  getStatus: () =>
+    api.get<{ configured: boolean; deviceCount: number; hasActiveSubscription: boolean }>('/push/status'),
+};
+
+export const remindersAPI = {
+  check: (secret?: string) =>
+    api.post('/reminders/check', {}, { params: secret ? { secret } : {} }),
+};
+
+export const adminAPI = {
+  getCleanupStats: (years: number) =>
+    api.get<any>(`/admin/expenses/cleanup/stats?years=${years}`),
+
+  cleanupExpenses: (years: number) =>
+    api.delete<any>(`/admin/expenses/cleanup?years=${years}`),
+};
+
 export default api;
+

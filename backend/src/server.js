@@ -44,6 +44,8 @@ app.use('/api/backup', require('./routes/backup'));
 app.use('/api/shares', require('./routes/shares'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/logs', require('./routes/logs'));
+app.use('/api/push', require('./routes/push'));
+app.use('/api/reminders', require('./routes/reminders'));
 
 // Health check
 app.get('/api/health', (req, res) => {

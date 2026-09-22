@@ -17,7 +17,17 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        value: https://despesa-app.vercel.com
+        value: https://despesa-app.vercel.app
+      # Web Push (VAPID)
+      - key: VAPID_PUBLIC_KEY
+        value: BHw5zSZANmAYkq15Zk6iUvaSsTf5mH5_Hd60JfTwm7S9QZ2LTUnaYN1jRpkmT7btJUAYsNtHbKUlTiBNG7nf0WA
+      - key: VAPID_PRIVATE_KEY
+        value: O3wzjwQ82bBvojgD-IAGExTUZHLvSgERtP1Kq_mJtdU
+      - key: VAPID_SUBJECT
+        value: mailto:admin@despesas.app
+      # Chave de segurança para o despertador externo (Cron)
+      - key: CRON_SECRET
+        generateValue: true
       # Email SMTP Configuration (Hotmail/Outlook)
       - key: SMTP_HOST
         value: smtp-mail.outlook.com
