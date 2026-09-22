@@ -227,12 +227,12 @@ export function StatisticsScreen({ userId }: { userId?: number } = {}) {
       {loading ? (
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">A carregar estatísticas...</p>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">A carregar estatísticas...</p>
         </div>
       ) : (
         <div className="space-y-6">
           {/* Settings Info */}
-          <div className="text-sm text-gray-600 space-y-1">
+          <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
             <p>Tolerância: {tolerance.toFixed(1)}%</p>
             <p>Janela: média dos últimos {windowMonths} meses</p>
             <p>Desce abaixo de -{tolerance}%, mantém entre -{tolerance}% e +{tolerance}%, sobe acima de +{tolerance}%</p>
@@ -249,7 +249,7 @@ export function StatisticsScreen({ userId }: { userId?: number } = {}) {
             </Button>
             
             {showComparisonDropdown && (
-              <div className="absolute z-10 w-full mt-2 bg-white border rounded shadow-lg">
+              <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg overflow-hidden">
                 {StatsComparisonOptions.map((option) => (
                   <button
                     key={option.value}
@@ -257,7 +257,7 @@ export function StatisticsScreen({ userId }: { userId?: number } = {}) {
                       setComparison(option.value);
                       setShowComparisonDropdown(false);
                     }}
-                    className="w-full px-4 py-2 text-left hover:bg-gray-100"
+                    className="w-full px-4 py-2.5 text-left text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
                     {option.value === 'WINDOW_AVERAGE' ? `Média dos últimos ${windowMonths} meses` : option.label}
                   </button>
@@ -274,12 +274,12 @@ export function StatisticsScreen({ userId }: { userId?: number } = {}) {
             <CardContent>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Total atual</span>
+                  <span className="text-gray-600 dark:text-gray-400">Total atual</span>
                   <span className="text-2xl font-bold">{formatMoney(currentTotal)}</span>
                 </div>
                 {reference !== null && (
                   <div className={`flex justify-between items-center ${getTrendColor(totalTrend)}`}>
-                    <span className="text-gray-600">Vs {getShortComparisonLabel()}</span>
+                    <span className="text-gray-600 dark:text-gray-400">Vs {getShortComparisonLabel()}</span>
                     <div className="flex items-center space-x-2">
                       <span>{getTrendIndicator(totalTrend)}</span>
                       <span className="font-semibold">
@@ -289,11 +289,11 @@ export function StatisticsScreen({ userId }: { userId?: number } = {}) {
                   </div>
                 )}
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Total ano corrente</span>
+                  <span className="text-gray-600 dark:text-gray-400">Total ano corrente</span>
                   <span className="text-lg font-semibold">{formatMoney(currentYearTotal)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Total ano anterior equivalente</span>
+                  <span className="text-gray-600 dark:text-gray-400">Total ano anterior equivalente</span>
                   <span className="text-lg font-semibold">{formatMoney(previousYearEquivalentTotal)}</span>
                 </div>
               </div>
@@ -305,7 +305,7 @@ export function StatisticsScreen({ userId }: { userId?: number } = {}) {
             <h3 className="text-lg font-semibold mb-4">Despesa a despesa</h3>
             {recurringExpenses.length === 0 ? (
               <Card>
-                <CardContent className="py-8 text-center text-gray-600">
+                <CardContent className="py-8 text-center text-gray-600 dark:text-gray-400">
                   Ainda não existem dados de despesas regulares
                 </CardContent>
               </Card>
@@ -358,7 +358,7 @@ export function StatisticsScreen({ userId }: { userId?: number } = {}) {
                         </div>
                         {expenseReference !== null && (
                           <div className={`flex justify-between items-center text-sm ${getTrendColor(expenseTrend)}`}>
-                            <span className="text-gray-600">Vs {getShortComparisonLabel()}</span>
+                            <span className="text-gray-600 dark:text-gray-400">Vs {getShortComparisonLabel()}</span>
                             <div className="flex items-center space-x-2">
                               <span>{getTrendIndicator(expenseTrend)}</span>
                               <span className="font-semibold">

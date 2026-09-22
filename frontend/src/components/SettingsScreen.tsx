@@ -6,14 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { settingsAPI, backupAPI, authAPI, adminAPI } from '@/lib/api';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
-import { Bell, BellOff, CheckCircle2, AlertCircle, Send, Loader2 } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
+import { Bell, BellOff, CheckCircle2, AlertCircle, Send, Loader2, Sun, Moon, Monitor } from 'lucide-react';
 import { Settings } from '@/types';
 
 export function SettingsScreen() {
+  const toast = useToast();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [cleanupYears, setCleanupYears] = useState(2);
@@ -43,7 +46,23 @@ export function SettingsScreen() {
 
   useEffect(() => {
     loadSettings();
+    const savedTheme = (localStorage.getItem('theme') as 'light' | 'dark' | 'system') || 'system';
+    setTheme(savedTheme);
   }, []);
+
+  const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    const isDark =
+      newTheme === 'dark' ||
+      (newTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    toast.success(`Tema definido para ${newTheme === 'light' ? 'Claro' : newTheme === 'dark' ? 'Escuro' : 'Sistema'}`);
+  };
 
   const loadSettings = async () => {
     setLoading(true);
@@ -87,10 +106,10 @@ export function SettingsScreen() {
         notifications_enabled: anyReminderActive ? 1 : 0,
         auto_cleanup_years: cleanupYears
       });
-      alert('Definições guardadas com sucesso!');
+      toast.success('Definições guardadas com sucesso!');
     } catch (error) {
       console.error('Failed to save settings:', error);
-      alert('Erro ao guardar definições');
+      toast.error('Erro ao guardar definições');
     } finally {
       setSaving(false);
     }
@@ -110,9 +129,10 @@ export function SettingsScreen() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      toast.success('Backup exportado com sucesso!');
     } catch (error) {
       console.error('Failed to export backup:', error);
-      alert('Erro ao exportar backup');
+      toast.error('Erro ao exportar backup');
     } finally {
       setExporting(false);
     }
@@ -127,11 +147,11 @@ export function SettingsScreen() {
       const text = await file.text();
       const data = JSON.parse(text);
       await backupAPI.import(data);
-      alert('Backup importado com sucesso!');
+      toast.success('Backup importado com sucesso!');
       loadSettings();
     } catch (error) {
       console.error('Failed to import backup:', error);
-      alert('Erro ao importar backup');
+      toast.error('Erro ao importar backup');
     } finally {
       setImporting(false);
     }
@@ -144,7 +164,7 @@ export function SettingsScreen() {
       setCleanupStats(response.data);
     } catch (error) {
       console.error('Failed to check cleanup stats:', error);
-      alert('Erro ao verificar estatísticas de limpeza');
+      toast.error('Erro ao verificar estatísticas de limpeza');
     } finally {
       setCleanupLoading(false);
     }
@@ -152,7 +172,7 @@ export function SettingsScreen() {
 
   const handleCleanup = async () => {
     if (!cleanupStats || cleanupStats.stats.totalToDelete === 0) {
-      alert('Não há registos para apagar');
+      toast.info('Não há registos para apagar');
       return;
     }
 
@@ -163,11 +183,11 @@ export function SettingsScreen() {
     setCleanupDeleting(true);
     try {
       const response = await adminAPI.cleanupExpenses(cleanupYears);
-      alert(`${response.data.deletedCount} registos apagados com sucesso!`);
+      toast.success(`${response.data.deletedCount} registos apagados com sucesso!`);
       setCleanupStats(null);
     } catch (error) {
       console.error('Failed to cleanup expenses:', error);
-      alert('Erro ao apagar registos antigos');
+      toast.error('Erro ao apagar registos antigos');
     } finally {
       setCleanupDeleting(false);
     }
@@ -221,15 +241,15 @@ export function SettingsScreen() {
   return (
     <div className="h-full flex flex-col">
       {/* Tabs */}
-      <div className="flex border-b mb-6 overflow-x-auto scrollbar-hide">
+      <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6 overflow-x-auto scrollbar-hide">
         {tabs.map((tab, index) => (
           <button
             key={tab}
             onClick={() => setActiveTab(index)}
-            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 font-medium ${
               activeTab === index
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
+                ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
             {tab}
@@ -244,35 +264,35 @@ export function SettingsScreen() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-primary-600" />
+                <Bell className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                 Notificações no Dispositivo
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 Ative as notificações para receber lembretes de débito diretamente no telemóvel ou computador, mesmo com a aplicação fechada.
               </p>
 
               {/* Estado do Suporte e Permissão */}
               {!pushSupported ? (
-                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-800 dark:text-amber-300 text-sm">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>Este navegador não suporta notificações Web Push. Se estiver no iOS (iPhone), adicione primeiro o site ao ecrã inicial.</span>
                 </div>
               ) : pushPermission === 'denied' ? (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-300 text-sm">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>As notificações estão bloqueadas nas permissões do seu navegador. Ative as permissões nas definições do browser.</span>
                 </div>
               ) : (
-                <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-lg">
                   <div className="flex items-center gap-2">
                     {pushSubscribed ? (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                     ) : (
                       <BellOff className="w-5 h-4 text-gray-400" />
                     )}
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                       {pushSubscribed ? 'Notificações ativas neste dispositivo' : 'Notificações inativas neste dispositivo'}
                     </span>
                   </div>
@@ -307,7 +327,7 @@ export function SettingsScreen() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full flex items-center justify-center gap-2 border-primary-200 text-primary-700 hover:bg-primary-50"
+                    className="w-full flex items-center justify-center gap-2 border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-950/50"
                     disabled={pushActionLoading}
                     onClick={async () => {
                       setTestNotificationFeedback(null);
@@ -331,12 +351,12 @@ export function SettingsScreen() {
 
               {/* Feedback do Teste ou Erro */}
               {testNotificationFeedback && (
-                <p className="text-xs text-center text-emerald-700 font-medium bg-emerald-50 p-2 rounded">
+                <p className="text-xs text-center text-emerald-700 dark:text-emerald-300 font-medium bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded border border-emerald-200 dark:border-emerald-800">
                   {testNotificationFeedback}
                 </p>
               )}
               {pushError && (
-                <p className="text-xs text-center text-red-600 font-medium bg-red-50 p-2 rounded">
+                <p className="text-xs text-center text-red-600 dark:text-red-300 font-medium bg-red-50 dark:bg-red-950/40 p-2 rounded border border-red-200 dark:border-red-800">
                   {pushError}
                 </p>
               )}
@@ -349,14 +369,14 @@ export function SettingsScreen() {
               <CardTitle>Regras de Lembretes de Débito</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 Escolha as notificações que pretende ativar com visto:
               </p>
 
               {/* 1º Lembrete Antecipado */}
-              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-gray-800 font-medium cursor-pointer flex items-center gap-2">
+                  <label className="text-gray-800 dark:text-gray-200 font-medium cursor-pointer flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={settings.debit_notifications_enabled === 1}
@@ -366,15 +386,15 @@ export function SettingsScreen() {
                     <span>1º Lembrete de antecedência</span>
                   </label>
                   {settings.debit_notifications_enabled === 1 ? (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Ativo</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">Ativo</span>
                   ) : (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 text-gray-600">Inativo</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Inativo</span>
                   )}
                 </div>
 
                 {settings.debit_notifications_enabled === 1 && (
                   <div className="flex items-center gap-2 pt-1 pl-6">
-                    <span className="text-sm text-gray-600">Avisar com</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Avisar com</span>
                     <Input
                       type="number"
                       value={settings.debit_reminder_days}
@@ -386,7 +406,7 @@ export function SettingsScreen() {
                       max="30"
                       className="w-20 h-9"
                     />
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
                       {settings.debit_reminder_days === 1 ? 'dia de antecedência (véspera)' : 'dias de antecedência'}
                     </span>
                   </div>
@@ -394,9 +414,9 @@ export function SettingsScreen() {
               </div>
 
               {/* 2º Lembrete Antecipado */}
-              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-gray-800 font-medium cursor-pointer flex items-center gap-2">
+                  <label className="text-gray-800 dark:text-gray-200 font-medium cursor-pointer flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={settings.second_debit_reminder_enabled === 1}
@@ -406,15 +426,15 @@ export function SettingsScreen() {
                     <span>2º Lembrete de antecedência</span>
                   </label>
                   {settings.second_debit_reminder_enabled === 1 ? (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Ativo</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">Ativo</span>
                   ) : (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 text-gray-600">Inativo</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Inativo</span>
                   )}
                 </div>
 
                 {settings.second_debit_reminder_enabled === 1 && (
                   <div className="flex items-center gap-2 pt-1 pl-6">
-                    <span className="text-sm text-gray-600">Avisar com</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Avisar com</span>
                     <Input
                       type="number"
                       value={settings.second_debit_reminder_days ?? 1}
@@ -426,7 +446,7 @@ export function SettingsScreen() {
                       max="30"
                       className="w-20 h-9"
                     />
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
                       {(settings.second_debit_reminder_days ?? 1) === 1 ? 'dia de antecedência (véspera)' : 'dias de antecedência'}
                     </span>
                   </div>
@@ -434,9 +454,9 @@ export function SettingsScreen() {
               </div>
 
               {/* 3º Verificação no próprio dia */}
-              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-gray-800 font-medium cursor-pointer flex items-center gap-2">
+                  <label className="text-gray-800 dark:text-gray-200 font-medium cursor-pointer flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={(settings.same_day_reminder_enabled ?? 1) === 1}
@@ -446,20 +466,20 @@ export function SettingsScreen() {
                     <span>Verificação no próprio dia do débito</span>
                   </label>
                   {(settings.same_day_reminder_enabled ?? 1) === 1 ? (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Ativo</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">Ativo</span>
                   ) : (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 text-gray-600">Inativo</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Inativo</span>
                   )}
                 </div>
-                <p className="text-xs text-gray-500 pl-6">
+                <p className="text-xs text-gray-500 dark:text-gray-400 pl-6">
                   Alerta às 10:00 se houver despesas agendadas para hoje que ainda não tenham sido marcadas como pagas.
                 </p>
               </div>
 
               {/* 4º Lembrete de Despesas Sem Valor */}
-              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-gray-800 font-medium cursor-pointer flex items-center gap-2">
+                  <label className="text-gray-800 dark:text-gray-200 font-medium cursor-pointer flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={settings.no_value_reminder_enabled === 1}
@@ -469,19 +489,19 @@ export function SettingsScreen() {
                     <span>Verificar despesas sem valor</span>
                   </label>
                   {settings.no_value_reminder_enabled === 1 ? (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Ativo</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">Ativo</span>
                   ) : (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 text-gray-600">Inativo</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Inativo</span>
                   )}
                 </div>
 
-                <p className="text-xs text-gray-500 pl-6">
+                <p className="text-xs text-gray-500 dark:text-gray-400 pl-6">
                   Dispara às 10:00 nos dias selecionados apenas se existirem despesas sem valor por preencher.
                 </p>
 
                 {settings.no_value_reminder_enabled === 1 && (
                   <div className="pt-2 pl-6 space-y-2">
-                    <span className="text-xs font-medium text-gray-700 block">
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 block">
                       Disparar nos seguintes dias do mês:
                     </span>
                     <div className="flex flex-wrap gap-2">
@@ -497,8 +517,8 @@ export function SettingsScreen() {
                             key={day}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs sm:text-sm font-medium cursor-pointer transition-colors ${
                               isChecked
-                                ? 'bg-primary-50 border-primary-300 text-primary-800'
-                                : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                                ? 'bg-primary-50 dark:bg-primary-950/50 border-primary-300 dark:border-primary-600 text-primary-800 dark:text-primary-300'
+                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
                             }`}
                           >
                             <input
@@ -527,7 +547,7 @@ export function SettingsScreen() {
                 )}
               </div>
 
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-xs leading-relaxed">
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg text-blue-900 dark:text-blue-200 text-xs leading-relaxed">
                 ℹ️ <strong>Horário Fixo:</strong> Os lembretes são verificados e enviados diariamente às <strong>10:00</strong> da manhã diretamente para as notificações do seu dispositivo.
               </div>
             </CardContent>
@@ -538,29 +558,79 @@ export function SettingsScreen() {
       {activeTab === 1 && (
         <Card>
           <CardHeader>
-            <CardTitle>Aplicação</CardTitle>
+            <CardTitle>Aplicação e Aparência</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="block text-gray-700 mb-1">Tolerância (%)</label>
-              <Input
-                type="number"
-                step="0.1"
-                value={settings.tolerance}
-                onChange={(e) => setSettings({ ...settings, tolerance: parseFloat(e.target.value) || 0 })}
-                min="0"
-                max="100"
-              />
+          <CardContent className="space-y-6">
+            {/* Seletor de Tema Visual */}
+            <div className="space-y-3">
+              <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200">
+                Aparência da Aplicação
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleThemeChange('light')}
+                  className={`flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border transition-all ${
+                    theme === 'light'
+                      ? 'border-primary-600 bg-primary-50 text-primary-700 dark:bg-primary-950 dark:border-primary-500 dark:text-primary-300 ring-2 ring-primary-500/20 shadow-sm font-medium'
+                      : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/80 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <Sun className="w-5 h-5 text-amber-500" />
+                  <span className="text-sm">Claro</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleThemeChange('dark')}
+                  className={`flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border transition-all ${
+                    theme === 'dark'
+                      ? 'border-primary-600 bg-primary-50 text-primary-700 dark:bg-primary-950 dark:border-primary-500 dark:text-primary-300 ring-2 ring-primary-500/20 shadow-sm font-medium'
+                      : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/80 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <Moon className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+                  <span className="text-sm">Escuro</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleThemeChange('system')}
+                  className={`flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border transition-all ${
+                    theme === 'system'
+                      ? 'border-primary-600 bg-primary-50 text-primary-700 dark:bg-primary-950 dark:border-primary-500 dark:text-primary-300 ring-2 ring-primary-500/20 shadow-sm font-medium'
+                      : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/80 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <Monitor className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                  <span className="text-sm">Sistema</span>
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                A opção <strong>Sistema</strong> adapta-se automaticamente ao tema definido no seu telemóvel ou computador.
+              </p>
             </div>
-            <div>
-              <label className="block text-gray-700 mb-1">Janela de estatísticas (meses)</label>
-              <Input
-                type="number"
-                value={settings.stats_window_months}
-                onChange={(e) => setSettings({ ...settings, stats_window_months: parseInt(e.target.value) || 0 })}
-                min="1"
-                max="60"
-              />
+
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-800 space-y-4">
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Tolerância (%)</label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={settings.tolerance}
+                  onChange={(e) => setSettings({ ...settings, tolerance: parseFloat(e.target.value) || 0 })}
+                  min="0"
+                  max="100"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Janela de estatísticas (meses)</label>
+                <Input
+                  type="number"
+                  value={settings.stats_window_months}
+                  onChange={(e) => setSettings({ ...settings, stats_window_months: parseInt(e.target.value) || 0 })}
+                  min="1"
+                  max="60"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -573,7 +643,7 @@ export function SettingsScreen() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h3 className="font-semibold mb-2">Backup</h3>
+              <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Backup</h3>
               <Button
                 onClick={handleExport}
                 disabled={exporting}
@@ -583,22 +653,22 @@ export function SettingsScreen() {
               </Button>
             </div>
             <div>
-              <h3 className="font-semibold mb-2">Restaurar</h3>
+              <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Restaurar</h3>
               <input
                 type="file"
                 accept=".json"
                 onChange={handleImport}
                 disabled={importing}
-                className="w-full"
+                className="w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 dark:file:bg-primary-950 dark:file:text-primary-300 cursor-pointer"
               />
-              {importing && <p className="text-sm text-gray-600 mt-1">A importar...</p>}
+              {importing && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">A importar...</p>}
             </div>
-            <div className="pt-4 border-t">
-              <p className="text-sm text-gray-600">
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 Versão aceite dos termos: {settings.terms_accepted_version}
               </p>
               {settings.terms_accepted_at && (
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   Aceite em: {new Date(settings.terms_accepted_at).toLocaleDateString('pt-PT')}
                 </p>
               )}
@@ -615,7 +685,7 @@ export function SettingsScreen() {
           <CardContent className="space-y-4">
             <form onSubmit={handleChangePassword} className="space-y-4">
               <div>
-                <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Password Atual
                 </label>
                 <Input
@@ -628,7 +698,7 @@ export function SettingsScreen() {
                 />
               </div>
               <div>
-                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Nova Password
                 </label>
                 <Input
@@ -642,7 +712,7 @@ export function SettingsScreen() {
                 />
               </div>
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Confirmar Nova Password
                 </label>
                 <Input
@@ -656,12 +726,12 @@ export function SettingsScreen() {
                 />
               </div>
               {passwordError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded">
                   {passwordError}
                 </div>
               )}
               {passwordSuccess && (
-                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
+                <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-3 rounded">
                   {passwordSuccess}
                 </div>
               )}
@@ -684,7 +754,7 @@ export function SettingsScreen() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-gray-700 mb-1">Apagar registos com mais de (anos):</label>
+              <label className="block text-gray-700 dark:text-gray-300 mb-1">Apagar registos com mais de (anos):</label>
               <div className="flex space-x-2">
                 {[2, 3, 4, 5].map((years) => (
                   <Button
@@ -702,8 +772,8 @@ export function SettingsScreen() {
               </div>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 p-4 rounded">
-              <p className="text-sm text-blue-800">
+            <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-4 rounded">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
                 Vão ser apagados todos os registos anteriores a {new Date(new Date().setFullYear(new Date().getFullYear() - cleanupYears)).getFullYear()}.
               </p>
             </div>
@@ -717,21 +787,21 @@ export function SettingsScreen() {
             </Button>
 
             {cleanupStats && (
-              <div className="bg-gray-50 border border-gray-200 p-4 rounded space-y-2">
-                <h4 className="font-semibold">Estatísticas de Limpeza:</h4>
-                <p className="text-sm">
+              <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 p-4 rounded space-y-2">
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200">Estatísticas de Limpeza:</h4>
+                <p className="text-sm text-gray-700 dark:text-gray-300">
                   <strong>Total a apagar:</strong> {cleanupStats.stats.totalToDelete} registos
                 </p>
-                <p className="text-sm">
+                <p className="text-sm text-gray-700 dark:text-gray-300">
                   <strong>Valor total:</strong> €{cleanupStats.stats.totalAmount?.toFixed(2)}
                 </p>
                 {cleanupStats.stats.oldestDate && (
-                  <p className="text-sm">
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
                     <strong>Registo mais antigo:</strong> {new Date(cleanupStats.stats.oldestDate).toLocaleDateString('pt-PT')}
                   </p>
                 )}
                 {cleanupStats.stats.newestDate && (
-                  <p className="text-sm">
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
                     <strong>Registo mais recente:</strong> {new Date(cleanupStats.stats.newestDate).toLocaleDateString('pt-PT')}
                   </p>
                 )}

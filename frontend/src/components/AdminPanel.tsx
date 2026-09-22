@@ -303,53 +303,53 @@ export function AdminPanel() {
       </CardHeader>
       <CardContent>
         {/* Tabs */}
-        <div className="flex border-b mb-6 overflow-x-auto scrollbar-hide">
+        <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6 overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 font-medium ${
               activeTab === 'pending'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
+                ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
             Pendentes ({pendingUsers.length})
           </button>
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 font-medium ${
               activeTab === 'all'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
+                ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
             Todos os Utilizadores ({allUsers.length})
           </button>
           <button
             onClick={() => setActiveTab('password-reset')}
-            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 font-medium ${
               activeTab === 'password-reset'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
+                ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
             Reset Password ({passwordResetRequests.length})
           </button>
           <button
             onClick={() => setActiveTab('logs')}
-            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 font-medium ${
               activeTab === 'logs'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
+                ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
             Logs do Sistema
           </button>
           <button
             onClick={() => setActiveTab('config')}
-            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 font-medium ${
               activeTab === 'config'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
+                ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
             Configuração Email

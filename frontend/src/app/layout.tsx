@@ -3,6 +3,8 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister'
 
+import { ToastProvider } from '@/components/ui/toast'
+
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
@@ -30,17 +32,36 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt">
+    <html lang="pt" suppressHydrationWarning>
       <head>
         <link rel="icon" href="/icon-192.png" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Despesas" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('theme') || 'system';
+                  var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                  if (isDark) {
+                    document.documentElement.classList.add('dark');
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
       </head>
       <body className={inter.className}>
-        <ServiceWorkerRegister />
-        {children}
+        <ToastProvider>
+          <ServiceWorkerRegister />
+          {children}
+        </ToastProvider>
       </body>
     </html>
   )

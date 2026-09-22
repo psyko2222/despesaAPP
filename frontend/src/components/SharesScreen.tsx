@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { sharesAPI } from '@/lib/api';
+import { useToast } from '@/components/ui/toast';
 import { AccountShare, SharesResponse } from '@/types';
 
 export function SharesScreen() {
+  const toast = useToast();
   const [invitations, setInvitations] = useState<AccountShare[]>([]);
   const [activeShares, setActiveShares] = useState<SharesResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -42,10 +44,10 @@ export function SharesScreen() {
     try {
       await sharesAPI.invite(inviteEmail);
       setInviteEmail('');
-      alert('Convite enviado com sucesso!');
+      toast.success('Convite enviado com sucesso!');
       loadShares();
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Erro ao enviar convite');
+      toast.error(error.response?.data?.error || 'Erro ao enviar convite');
     } finally {
       setInviting(false);
     }
@@ -54,20 +56,20 @@ export function SharesScreen() {
   const handleAccept = async (id: number) => {
     try {
       await sharesAPI.acceptInvitation(id);
-      alert('Partilha aceite com sucesso!');
+      toast.success('Partilha aceite com sucesso!');
       loadShares();
     } catch (error) {
-      alert('Erro ao aceitar partilha');
+      toast.error('Erro ao aceitar partilha');
     }
   };
 
   const handleReject = async (id: number) => {
     try {
       await sharesAPI.rejectInvitation(id);
-      alert('Partilha rejeitada');
+      toast.info('Partilha rejeitada');
       loadShares();
     } catch (error) {
-      alert('Erro ao rejeitar partilha');
+      toast.error('Erro ao rejeitar partilha');
     }
   };
 
@@ -76,10 +78,10 @@ export function SharesScreen() {
 
     try {
       await sharesAPI.revokeShare(id);
-      alert('Partilha revogada com sucesso!');
+      toast.success('Partilha revogada com sucesso!');
       loadShares();
     } catch (error) {
-      alert('Erro ao revogar partilha');
+      toast.error('Erro ao revogar partilha');
     }
   };
 
@@ -88,10 +90,10 @@ export function SharesScreen() {
 
     try {
       await sharesAPI.leaveShare(id);
-      alert('Saiu da partilha com sucesso!');
+      toast.success('Saiu da partilha com sucesso!');
       loadShares();
     } catch (error) {
-      alert('Erro ao sair da partilha');
+      toast.error('Erro ao sair da partilha');
     }
   };
 
@@ -101,7 +103,7 @@ export function SharesScreen() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-        <p className="mt-2 text-gray-600">A carregar partilhas...</p>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">A carregar partilhas...</p>
       </div>
     );
   }
@@ -109,15 +111,15 @@ export function SharesScreen() {
   return (
     <div className="h-full flex flex-col">
       {/* Tabs */}
-      <div className="flex border-b mb-6 overflow-x-auto scrollbar-hide">
+      <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6 overflow-x-auto scrollbar-hide">
         {tabs.map((tab, index) => (
           <button
             key={tab}
             onClick={() => setActiveTab(index)}
-            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
+            className={`px-4 py-2 border-b-2 transition-colors whitespace-nowrap flex-shrink-0 font-medium ${
               activeTab === index
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
+                ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
             {tab}
@@ -133,14 +135,14 @@ export function SharesScreen() {
           </CardHeader>
           <CardContent>
             {invitations.length === 0 ? (
-              <p className="text-gray-600 text-center py-4">Sem convites pendentes</p>
+              <p className="text-gray-600 dark:text-gray-400 text-center py-4">Sem convites pendentes</p>
             ) : (
               <div className="space-y-3">
                 {invitations.map((invitation) => (
-                  <div key={invitation.id} className="flex justify-between items-center p-4 border rounded">
+                  <div key={invitation.id} className="flex justify-between items-center p-4 border border-gray-200 dark:border-gray-800 rounded-lg bg-gray-50/50 dark:bg-gray-800/40">
                     <div>
-                      <p className="font-medium">{invitation.owner_email}</p>
-                      <p className="text-sm text-gray-600">
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{invitation.owner_email}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Convidou-te a partilhar a conta
                       </p>
                     </div>
@@ -172,7 +174,7 @@ export function SharesScreen() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-gray-700 mb-1">Email</label>
+              <label className="block text-gray-700 dark:text-gray-300 mb-1">Email</label>
               <div className="flex space-x-2">
                 <Input
                   type="email"
@@ -190,17 +192,17 @@ export function SharesScreen() {
               </div>
             </div>
 
-            <div className="pt-4 border-t">
-              <h3 className="font-semibold mb-3">Partilhas Ativas</h3>
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Partilhas Ativas</h3>
               {activeShares?.sent.length === 0 ? (
-                <p className="text-gray-600 text-center py-4">Sem partilhas ativas</p>
+                <p className="text-gray-600 dark:text-gray-400 text-center py-4">Sem partilhas ativas</p>
               ) : (
                 <div className="space-y-3">
                   {activeShares?.sent.map((share) => (
-                    <div key={share.id} className="flex justify-between items-center p-4 border rounded">
+                    <div key={share.id} className="flex justify-between items-center p-4 border border-gray-200 dark:border-gray-800 rounded-lg bg-gray-50/50 dark:bg-gray-800/40">
                       <div>
-                        <p className="font-medium">{share.shared_with_email}</p>
-                        <p className="text-sm text-gray-600">
+                        <p className="font-medium text-gray-900 dark:text-gray-100">{share.shared_with_email}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Permissões: {share.can_read ? 'Ler' : ''} {share.can_write ? 'Escrever' : ''} {share.can_delete ? 'Apagar' : ''}
                         </p>
                       </div>
@@ -226,14 +228,14 @@ export function SharesScreen() {
           </CardHeader>
           <CardContent>
             {activeShares?.received.length === 0 ? (
-              <p className="text-gray-600 text-center py-4">Ninguém partilhou a conta contigo</p>
+              <p className="text-gray-600 dark:text-gray-400 text-center py-4">Ninguém partilhou a conta contigo</p>
             ) : (
               <div className="space-y-3">
                 {activeShares?.received.map((share) => (
-                  <div key={share.id} className="flex justify-between items-center p-4 border rounded">
+                  <div key={share.id} className="flex justify-between items-center p-4 border border-gray-200 dark:border-gray-800 rounded-lg bg-gray-50/50 dark:bg-gray-800/40">
                     <div>
-                      <p className="font-medium">{share.owner_email}</p>
-                      <p className="text-sm text-gray-600">
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{share.owner_email}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Permissões: {share.can_read ? 'Ler' : ''} {share.can_write ? 'Escrever' : ''} {share.can_delete ? 'Apagar' : ''}
                       </p>
                     </div>

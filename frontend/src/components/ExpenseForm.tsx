@@ -82,7 +82,7 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
       <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
         <CardHeader>
           <CardTitle>{initialExpense ? 'Editar Despesa' : 'Nova Despesa'}</CardTitle>
@@ -90,7 +90,7 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Descrição
               </label>
               <Input
@@ -102,8 +102,8 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Valor (€) {recurring && !fixedAmount && <span className="text-gray-500 text-xs">(opcional para valores variáveis)</span>}
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Valor (€) {recurring && !fixedAmount && <span className="text-gray-500 dark:text-gray-400 text-xs">(opcional para valores variáveis)</span>}
               </label>
               <Input
                 type="text"
@@ -112,14 +112,14 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
                 placeholder={recurring && !fixedAmount ? "Deixar vazio para valor variável" : "0.00"}
               />
               {recurring && !fixedAmount && (
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {amount ? "Para voltar a 'sem valor', apague o valor acima" : "Vazio = sem valor"}
                 </p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Data de Débito
               </label>
               <Input
@@ -136,9 +136,9 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
                 id="paid"
                 checked={paid}
                 onChange={(e) => setPaid(e.target.checked)}
-                className="w-4 h-4"
+                className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
               />
-              <label htmlFor="paid" className="text-sm">
+              <label htmlFor="paid" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                 Pago
               </label>
             </div>
@@ -149,9 +149,9 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
                 id="recurring"
                 checked={recurring}
                 onChange={(e) => setRecurring(e.target.checked)}
-                className="w-4 h-4"
+                className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
               />
-              <label htmlFor="recurring" className="text-sm">
+              <label htmlFor="recurring" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                 Despesa Recorrente
               </label>
             </div>
@@ -159,7 +159,7 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
             {recurring && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Periodicidade
                   </label>
                   <select
@@ -173,7 +173,7 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
                       });
                       setRecurrenceMonths(newValue);
                     }}
-                    className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                    className="w-full h-10 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value={1}>Mensal</option>
                     <option value={2}>Bimestral</option>
@@ -189,9 +189,9 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
                     id="fixedAmount"
                     checked={fixedAmount}
                     onChange={(e) => setFixedAmount(e.target.checked)}
-                    className="w-4 h-4"
+                    className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
                   />
-                  <label htmlFor="fixedAmount" className="text-sm">
+                  <label htmlFor="fixedAmount" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                     Valor sempre igual
                   </label>
                 </div>
@@ -199,7 +199,7 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
             )}
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded">
                 {error}
               </div>
             )}

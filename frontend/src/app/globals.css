@@ -16,15 +16,24 @@
 
 @layer base {
   * {
-    @apply border-gray-200;
+    @apply border-gray-200 dark:border-gray-800;
   }
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-gray-50 text-gray-900 transition-colors duration-200;
+  }
+  .dark body {
+    @apply bg-gray-950 text-gray-100;
   }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  .pb-safe {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  }
+  .bottom-safe {
+    bottom: env(safe-area-inset-bottom, 0px);
   }
 }
