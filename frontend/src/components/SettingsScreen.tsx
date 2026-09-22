@@ -528,7 +528,7 @@ export function SettingsScreen() {
               </div>
 
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-xs leading-relaxed">
-                ℹ️ <strong>Horário Fixo:</strong> Os lembretes são verificados e enviados diariamente às <strong>10:00</strong> da manhã através do serviço agendado. Se houver despesas a debitar, receberá um alerta no telemóvel e um resumo por email.
+                ℹ️ <strong>Horário Fixo:</strong> Os lembretes são verificados e enviados diariamente às <strong>10:00</strong> da manhã diretamente para as notificações do seu dispositivo.
               </div>
             </CardContent>
           </Card>
