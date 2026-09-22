@@ -68,7 +68,8 @@ router.put('/', authenticateToken, async (req, res) => {
       stats_window_months,
       terms_accepted_version,
       terms_accepted_at,
-      auto_cleanup_years
+      auto_cleanup_years,
+      stats_comparison
     } = req.body;
 
     // Build dynamic update query to handle undefined values
@@ -136,6 +137,22 @@ router.put('/', authenticateToken, async (req, res) => {
       updates.push(isPostgres ? `auto_cleanup_years = $${paramIndex++}` : `auto_cleanup_years = ?`);
       params.push(auto_cleanup_years);
     }
+    if (stats_comparison !== undefined) {
+      updates.push(isPostgres ? `stats_comparison = $${paramIndex++}` : `stats_comparison = ?`);
+      params.push(stats_comparison);
+    }
+
+    // Ensure settings row exists for user
+    const checkSql = isPostgres
+      ? 'SELECT id FROM settings WHERE user_id = $1'
+      : 'SELECT id FROM settings WHERE user_id = ?';
+    const existingSettings = await queryOne(checkSql, [userId]);
+    if (!existingSettings) {
+      const insertSql = isPostgres
+        ? 'INSERT INTO settings (user_id) VALUES ($1)'
+        : 'INSERT INTO settings (user_id) VALUES (?)';
+      await run(insertSql, [userId]);
+    }
 
     if (updates.length === 0) {
       // No fields to update, just return current settings
@@ -146,10 +163,10 @@ router.put('/', authenticateToken, async (req, res) => {
       return res.json(settings);
     }
 
-    updates.push(isPostgres ? `user_id = $${paramIndex++}` : `user_id = ?`);
+    const whereClause = isPostgres ? `WHERE user_id = $${paramIndex++}` : `WHERE user_id = ?`;
     params.push(userId);
 
-    const updateSql = `UPDATE settings SET ${updates.join(', ')}`;
+    const updateSql = `UPDATE settings SET ${updates.join(', ')} ${whereClause}`;
     await run(updateSql, params);
 
     const sql = isPostgres
