@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, checkDataAccess, requireWriteAccess, requireDeleteAccess } = require('../middleware/auth');
-const { db, isPostgres, financialPeriod, currentFinancialPeriodMonth, adjustedDebitDate, normalizedRecurrenceMonths, query, queryOne, run } = require('../models/database');
+const { db, isPostgres, financialPeriod, getPreviousMonth, currentFinancialPeriodMonth, adjustedDebitDate, normalizedRecurrenceMonths, query, queryOne, run } = require('../models/database');
 
 // Get expenses for a specific month
 router.get('/month/:month', authenticateToken, checkDataAccess, async (req, res) => {
@@ -84,6 +84,162 @@ router.get('/upcoming', authenticateToken, checkDataAccess, async (req, res) => 
   } catch (error) {
     console.error('Get upcoming expenses error:', error);
     res.status(500).json({ error: 'Failed to get upcoming expenses' });
+  }
+});
+
+// Get statistics summary (fast aggregated stats for Statistics screen)
+router.get('/statistics/summary', authenticateToken, checkDataAccess, async (req, res) => {
+  try {
+    const userId = req.dataUserId;
+    const targetMonth = req.query.month || currentFinancialPeriodMonth();
+    const windowMonths = Math.max(1, Math.min(12, parseInt(req.query.windowMonths) || 3));
+    const [year, monthNum] = targetMonth.split('-').map(Number);
+
+    const currentPeriod = financialPeriod(targetMonth);
+    const currentStart = currentPeriod.start.toISOString().split('T')[0];
+    const currentEnd = currentPeriod.end.toISOString().split('T')[0];
+
+    const sumSql = isPostgres
+      ? 'SELECT COALESCE(SUM(amount_cents), 0) AS total FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3'
+      : 'SELECT COALESCE(SUM(amount_cents), 0) AS total FROM expenses WHERE user_id = ? AND debit_date BETWEEN ? AND ?';
+
+    // 1. Current month expenses
+    const currExpensesSql = isPostgres
+      ? 'SELECT * FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3 ORDER BY debit_date, description'
+      : 'SELECT * FROM expenses WHERE user_id = ? AND debit_date BETWEEN ? AND ? ORDER BY debit_date, description';
+    const currExpensesPromise = query(currExpensesSql, [userId, currentStart, currentEnd]);
+
+    // 2. Recurring expenses for current financial period
+    const recurringSql = isPostgres
+      ? 'SELECT * FROM expenses WHERE user_id = $1 AND recurring = 1 AND debit_date BETWEEN $2 AND $3 ORDER BY debit_date ASC'
+      : 'SELECT * FROM expenses WHERE user_id = ? AND recurring = 1 AND debit_date BETWEEN ? AND ? ORDER BY debit_date ASC';
+    const recurringPromise = query(recurringSql, [userId, currentStart, currentEnd]);
+
+    // 3. Current year total (from month 1 to current month)
+    const startCurrYear = financialPeriod(`${year}-01`).start.toISOString().split('T')[0];
+    const currYearPromise = queryOne(sumSql, [userId, startCurrYear, currentEnd]);
+
+    // 4. Previous year equivalent total (from month 1 to same month in prev year)
+    const prevYear = year - 1;
+    const startPrevYear = financialPeriod(`${prevYear}-01`).start.toISOString().split('T')[0];
+    const endPrevYear = financialPeriod(`${prevYear}-${String(monthNum).padStart(2, '0')}`).end.toISOString().split('T')[0];
+    const prevYearPromise = queryOne(sumSql, [userId, startPrevYear, endPrevYear]);
+
+    // 5. Previous month total
+    const prevMonthStr = getPreviousMonth(targetMonth, 1);
+    const prevMonthPeriod = financialPeriod(prevMonthStr);
+    const prevMonthPromise = queryOne(sumSql, [
+      userId,
+      prevMonthPeriod.start.toISOString().split('T')[0],
+      prevMonthPeriod.end.toISOString().split('T')[0]
+    ]);
+
+    // 6. Previous year same month total
+    const prevYearMonthStr = `${year - 1}-${String(monthNum).padStart(2, '0')}`;
+    const prevYearMonthPeriod = financialPeriod(prevYearMonthStr);
+    const prevYearMonthPromise = queryOne(sumSql, [
+      userId,
+      prevYearMonthPeriod.start.toISOString().split('T')[0],
+      prevYearMonthPeriod.end.toISOString().split('T')[0]
+    ]);
+
+    // 7. Window month totals
+    const windowMonthPromises = Array.from({ length: windowMonths }, (_, i) => {
+      const wMonthStr = getPreviousMonth(targetMonth, i);
+      const wPeriod = financialPeriod(wMonthStr);
+      return queryOne(sumSql, [
+        userId,
+        wPeriod.start.toISOString().split('T')[0],
+        wPeriod.end.toISOString().split('T')[0]
+      ]);
+    });
+
+    const [
+      currExpensesResult,
+      recurringResult,
+      currYearRow,
+      prevYearRow,
+      prevMonthRow,
+      prevYearMonthRow,
+      ...windowRows
+    ] = await Promise.all([
+      currExpensesPromise,
+      recurringPromise,
+      currYearPromise,
+      prevYearPromise,
+      prevMonthPromise,
+      prevYearMonthPromise,
+      ...windowMonthPromises
+    ]);
+
+    const currentExpenses = isPostgres ? currExpensesResult.rows : currExpensesResult;
+    const recurringExpensesRaw = isPostgres ? recurringResult.rows : recurringResult;
+
+    // Group recurring expenses by series
+    const groupedRecurring = [];
+    const seenSeries = new Set();
+    recurringExpensesRaw.forEach(expense => {
+      const seriesId = expense.series_id || expense.id;
+      if (!seenSeries.has(seriesId)) {
+        seenSeries.add(seriesId);
+        groupedRecurring.push(expense);
+      }
+    });
+
+    groupedRecurring.sort((a, b) => {
+      if (a.paid === 0 && b.paid === 1) return -1;
+      if (a.paid === 1 && b.paid === 0) return 1;
+      if (a.paid === 0 && b.paid === 0) {
+        return new Date(a.debit_date) - new Date(b.debit_date);
+      }
+      return new Date(b.debit_date) - new Date(a.debit_date);
+    });
+
+    // Load series data for recurring expenses in one single query
+    const seriesIds = Array.from(seenSeries);
+    const recurringSeriesMap = {};
+    for (const sid of seriesIds) {
+      recurringSeriesMap[sid] = [];
+    }
+
+    if (seriesIds.length > 0) {
+      const placeholders = isPostgres
+        ? seriesIds.map((_, i) => `$${i + 2}`).join(',')
+        : seriesIds.map(() => '?').join(',');
+      const seriesSql = isPostgres
+        ? `SELECT * FROM expenses WHERE user_id = $1 AND (series_id IN (${placeholders}) OR id IN (${placeholders})) ORDER BY debit_date`
+        : `SELECT * FROM expenses WHERE user_id = ? AND (series_id IN (${placeholders}) OR id IN (${placeholders})) ORDER BY debit_date`;
+      const seriesResult = await query(seriesSql, [userId, ...seriesIds]);
+      const seriesRows = isPostgres ? seriesResult.rows : seriesResult;
+
+      seriesRows.forEach(exp => {
+        const sid = exp.series_id || exp.id;
+        if (recurringSeriesMap[sid]) {
+          recurringSeriesMap[sid].push(exp);
+        }
+      });
+    }
+
+    const windowTotals = windowRows.map(row => Number(row?.total || 0));
+    const windowAverage = windowTotals.length > 0
+      ? windowTotals.reduce((a, b) => a + b, 0) / windowTotals.length
+      : null;
+
+    res.json({
+      currentMonthExpenses: currentExpenses,
+      currentTotal: currentExpenses.reduce((sum, exp) => sum + exp.amount_cents, 0),
+      recurringExpenses: groupedRecurring,
+      recurringSeries: recurringSeriesMap,
+      currentYearTotal: Number(currYearRow?.total || 0),
+      previousYearEquivalentTotal: Number(prevYearRow?.total || 0),
+      previousMonthTotal: Number(prevMonthRow?.total || 0),
+      previousYearMonthTotal: Number(prevYearMonthRow?.total || 0),
+      windowAverage,
+      windowTotals
+    });
+  } catch (error) {
+    console.error('Get statistics summary error:', error);
+    res.status(500).json({ error: 'Failed to get statistics summary' });
   }
 });
 

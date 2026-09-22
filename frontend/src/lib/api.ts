@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Expense, Settings, AccountShare, SharesResponse } from '@/types';
+import { AuthResponse, User, Expense, Settings, AccountShare, SharesResponse, StatisticsSummaryResponse } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -99,6 +99,15 @@ export const expensesAPI = {
   
   ensureFuture: (monthsAhead: number = 18) =>
     api.post('/expenses/ensure-future', { monthsAhead }),
+
+  getStatisticsSummary: (params: { month?: string; windowMonths?: number; userId?: number } = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.month) searchParams.append('month', params.month);
+    if (params.windowMonths) searchParams.append('windowMonths', params.windowMonths.toString());
+    if (params.userId) searchParams.append('userId', params.userId.toString());
+    const query = searchParams.toString();
+    return api.get<StatisticsSummaryResponse>(`/expenses/statistics/summary${query ? `?${query}` : ''}`);
+  },
 };
 
 export const settingsAPI = {

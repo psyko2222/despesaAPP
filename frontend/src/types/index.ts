@@ -95,3 +95,17 @@ export interface SharesResponse {
   sent: AccountShare[];
   received: AccountShare[];
 }
+
+export interface StatisticsSummaryResponse {
+  currentMonthExpenses: Expense[];
+  currentTotal: number;
+  recurringExpenses: Expense[];
+  recurringSeries: Record<string, Expense[]>;
+  currentYearTotal: number;
+  previousYearEquivalentTotal: number;
+  previousMonthTotal: number;
+  previousYearMonthTotal: number;
+  windowAverage: number | null;
+  windowTotals: number[];
+}
+

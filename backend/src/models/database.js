@@ -317,9 +317,15 @@ async function initializeDatabase() {
 // Help helpers
 function financialPeriod(startMonth) {
   const [year, month] = startMonth.split('-').map(Number);
-  const startDate = new Date(year, month - 1, 21);
-  const endDate = new Date(year, month, 20);
+  const startDate = new Date(Date.UTC(year, month - 1, 21));
+  const endDate = new Date(Date.UTC(year, month, 20));
   return { start: startDate, end: endDate };
+}
+
+function getPreviousMonth(month, offset = 1) {
+  const [year, monthNum] = month.split('-').map(Number);
+  const date = new Date(Date.UTC(year, monthNum - 1 - offset, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
 function currentFinancialPeriodMonth(date = new Date()) {
@@ -408,6 +414,7 @@ module.exports = {
   isPostgres,
   initializeDatabase,
   financialPeriod,
+  getPreviousMonth,
   currentFinancialPeriodMonth,
   adjustedDebitDate,
   normalizedRecurrenceMonths,
