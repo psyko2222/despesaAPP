@@ -48,7 +48,7 @@ app.use('/api/push', require('./routes/push'));
 app.use('/api/reminders', require('./routes/reminders'));
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get(['/health', '/api/health'], (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
