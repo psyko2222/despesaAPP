@@ -79,6 +79,9 @@ async function sendMail({ to, subject, text, html }) {
 
     const transporter = nodemailer.createTransport({
       ...smtpConfig,
+      connectionTimeout: 4000,
+      greetingTimeout: 4000,
+      socketTimeout: 5000,
       auth:
         process.env.SMTP_USER && process.env.SMTP_PASS
           ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }

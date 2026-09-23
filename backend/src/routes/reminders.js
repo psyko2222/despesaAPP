@@ -204,7 +204,7 @@ async function processDebitReminders(options = {}) {
       const pushSent = await sendPush(notificationTitle, notificationBody, `debit-${daysBefore}`);
 
       let emailSent = false;
-      if (isEmailConfigured()) {
+      if (process.env.ENABLE_EMAIL_REMINDERS === 'true' && isEmailConfigured()) {
         try {
           const emailRes = await sendDebitReminderEmail(user.email, expenses, daysBefore);
           emailSent = emailRes.success;
@@ -280,7 +280,7 @@ async function processDebitReminders(options = {}) {
           const pushSent = await sendPush(notificationTitle, notificationBody, 'no-value-reminder');
 
           let emailSent = false;
-          if (isEmailConfigured()) {
+          if (process.env.ENABLE_EMAIL_REMINDERS === 'true' && isEmailConfigured()) {
             try {
               const emailRes = await sendNoValueExpensesEmail(user.email, noValExpenses);
               emailSent = emailRes.success;
