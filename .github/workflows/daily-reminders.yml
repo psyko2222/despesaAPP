@@ -35,11 +35,11 @@ jobs:
             URL="${URL}&forceDay=${{ github.event.inputs.force_day }}"
           fi
 
-          echo "A chamar endpoint no Render (aguarda até 75s pelo arranque a frio)..."
+          echo "A chamar endpoint no Render (aguarda até 3 minutos pelo arranque a frio)..."
 
-          # Chamada direta sem repetição para evitar notificações duplicadas
+          # Chamada direta sem repetição (termina assim que o servidor responder)
           RESPONSE=$(curl -s -S \
-            --max-time 75 \
+            --max-time 180 \
             -w "\nHTTP_CODE:%{http_code}" \
             -X POST "$URL")
 
