@@ -1,0 +1,61 @@
+name: Disparar Lembretes Diários
+
+on:
+  schedule:
+    # Corre todos os dias às 09:00 UTC (10:00 em Lisboa / horário de verão)
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      force_day:
+        description: 'Simular dia do mês (opcional, ex: 1, 15, 20)'
+        required: false
+        default: ''
+
+jobs:
+  check-reminders:
+    name: Enviar Lembretes de Despesas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Acordar Render e Processar Lembretes
+        run: |
+          echo "======================================================="
+          echo "⏰ A iniciar rotina de lembretes diários: $(date -u)"
+          echo "======================================================="
+
+          SECRET="${{ secrets.CRON_SECRET }}"
+          if [ -z "$SECRET" ]; then
+            # Se não foi configurado segredo no GitHub Secrets, usa a chave de contingência
+            SECRET="despesas-cron-secret-key-change-this"
+          fi
+
+          URL="https://despesaapp.onrender.com/api/reminders/check?secret=${SECRET}"
+          
+          # Se o utilizador forneceu force_day no teste manual
+          if [ -n "${{ github.event.inputs.force_day }}" ]; then
+            URL="${URL}&forceDay=${{ github.event.inputs.force_day }}"
+          fi
+
+          echo "A chamar endpoint no Render com timeout de 3 minutos (180s)..."
+          echo "Isto permite que o Render acorde do modo de hibernação sem falhar."
+
+          # curl com max-time 180s e 2 repetições em caso de 503 transitório
+          RESPONSE=$(curl -s -S \
+            --max-time 180 \
+            --retry 2 \
+            --retry-delay 10 \
+            -w "\nHTTP_CODE:%{http_code}" \
+            -X POST "$URL")
+
+          HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE:" | cut -d':' -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_CODE:")
+
+          echo "Código HTTP recebido: $HTTP_CODE"
+          echo "Resposta do servidor:"
+          echo "$BODY"
+
+          if [ "$HTTP_CODE" -eq 200 ]; then
+            echo "✅ Lembretes processados com sucesso!"
+          else
+            echo "❌ Erro ao processar lembretes (Código HTTP: $HTTP_CODE)"
+            exit 1
+          fi

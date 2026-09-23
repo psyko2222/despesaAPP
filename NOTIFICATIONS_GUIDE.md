@@ -18,31 +18,26 @@ O sistema de notificações da aplicação Despesas utiliza o standard oficial *
 
 ---
 
-## 2. Como Configurar o "Despertador Externo" (Gratuito)
+## 2. Como Funciona o Despertador Automático (GitHub Actions)
 
-Para garantir que o backend no Render acorda todas as manhãs às **10:00** e envia os lembretes para o seu telemóvel e email:
+O sistema de lembretes diários está configurado para correr automaticamente através do **GitHub Actions** (ficheiro `.github/workflows/daily-reminders.yml`):
 
-1. Crie uma conta gratuita em [cron-job.org](https://cron-job.org).
-2. Clique em **"Create cronjob"**:
-   - **Title:** `Despesas Lembretes Diários`
-   - **URL:** `https://SUA-URL-BACKEND.onrender.com/api/reminders/check` (substitua pela sua URL real do Render, ex: `https://despesaapp.onrender.com/api/reminders/check`)
-   - **Execution schedule:** Diariamente às `10:00` (fuso horário: `Europe/Lisbon`).
-   - **Request Method:** `POST` (ou `GET`)
-   - **Headers:**
-     - Key: `Authorization`
-     - Value: `Bearer SUA_CHAVE_CRON_SECRET` (o valor definido na variável `CRON_SECRET` no Render)
-     *(Em alternativa, pode colocar na própria URL: `https://.../api/reminders/check?secret=SUA_CHAVE_CRON_SECRET`)*
-3. Na secção **"Advanced" (Definições Avançadas)** do cronjob:
-   - **Request timeout:** altere para `60 s` (ou `120 s`).
-   - **Failure retry:** ative com `1 retry` após `60 s`.
-   *(Isto é fundamental no plano gratuito do Render, porque quando o servidor está "a dormir" demora ~40-50 segundos a arrancar. A 1ª tentativa acorda o servidor e a 2ª executa com sucesso total).*
-4. Guarde o cronjob.
+1. **Agendamento Automático:**
+   - Corre todos os dias às **10:00** (hora de Lisboa).
+   - O GitHub chama o endpoint seguro `https://despesaapp.onrender.com/api/reminders/check`.
+   - **Sem limite de 30 segundos:** O GitHub Actions aguarda pacientemente até 3 minutos pelo arranque a frio do Render.
 
-Todos os dias às 10:00:
-- O cronjob chama o link.
-- O Render acorda automaticamente.
-- O sistema verifica quais as despesas a vencer de acordo com os dias configurados nas definições.
-- Envia notificação Web Push aos dispositivos registados.
+2. **Como Executar um Teste Manual no GitHub:**
+   - No GitHub, aceda ao separador **Actions**.
+   - Na barra lateral esquerda, clique em **"Disparar Lembretes Diários"**.
+   - Clique no botão **"Run workflow"** e confirme em **"Run workflow"**.
+   - Poderá acompanhar em direto a execução e o relatório de lembretes enviados!
+
+3. **Configuração de Segredo (Opcional):**
+   - Caso tenha definido uma `CRON_SECRET` personalizada no Render, adicione-a também no GitHub:
+     - No seu repositório no GitHub: **Settings > Secrets and variables > Actions > New repository secret**.
+     - Nome: `CRON_SECRET`
+     - Valor: O mesmo valor configurado no Render.
 
 ---
 
