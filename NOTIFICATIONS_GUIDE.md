@@ -32,13 +32,17 @@ Para garantir que o backend no Render acorda todas as manhãs às **10:00** e en
      - Key: `Authorization`
      - Value: `Bearer SUA_CHAVE_CRON_SECRET` (o valor definido na variável `CRON_SECRET` no Render)
      *(Em alternativa, pode colocar na própria URL: `https://.../api/reminders/check?secret=SUA_CHAVE_CRON_SECRET`)*
-3. Guarde o cronjob.
+3. Na secção **"Advanced" (Definições Avançadas)** do cronjob:
+   - **Request timeout:** altere para `60 s` (ou `120 s`).
+   - **Failure retry:** ative com `1 retry` após `60 s`.
+   *(Isto é fundamental no plano gratuito do Render, porque quando o servidor está "a dormir" demora ~40-50 segundos a arrancar. A 1ª tentativa acorda o servidor e a 2ª executa com sucesso total).*
+4. Guarde o cronjob.
 
 Todos os dias às 10:00:
 - O cronjob chama o link.
 - O Render acorda automaticamente.
 - O sistema verifica quais as despesas a vencer de acordo com os dias configurados nas definições.
-- Envia notificação Web Push e email de resumo.
+- Envia notificação Web Push aos dispositivos registados.
 
 ---
 
