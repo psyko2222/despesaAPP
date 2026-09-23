@@ -48,11 +48,20 @@ async function sendPushNotification(subscription, payload = {}) {
     icon: payload.icon || '/icon-192.png',
     badge: '/icon-192.png',
     url: payload.url || '/',
-    data: payload.data || {}
+    data: payload.data || {},
+    tag: payload.tag || undefined
   });
 
+  const pushOptions = {
+    urgency: 'high',
+    TTL: 86400, // 24 horas
+    headers: {
+      Urgency: 'high'
+    }
+  };
+
   try {
-    const result = await webpush.sendNotification(pushSubscription, notificationPayload);
+    const result = await webpush.sendNotification(pushSubscription, notificationPayload, pushOptions);
     return { success: true, statusCode: result.statusCode };
   } catch (error) {
     console.error(`Web Push send error for ${subscription.endpoint?.slice(0, 30)}...:`, error.message);

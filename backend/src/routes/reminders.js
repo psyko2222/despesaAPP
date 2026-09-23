@@ -96,7 +96,7 @@ async function processDebitReminders(options = {}) {
     const subscriptions = isPostgres ? subsResult.rows : subsResult;
 
     // Função auxiliar para envio de notificação push
-    const sendPush = async (title, body) => {
+    const sendPush = async (title, body, tag = undefined) => {
       let pushSent = 0;
       if (subscriptions && subscriptions.length > 0) {
         for (const sub of subscriptions) {
@@ -105,7 +105,8 @@ async function processDebitReminders(options = {}) {
             body,
             icon: '/icon-192.png',
             badge: '/icon-192.png',
-            url: '/'
+            url: '/',
+            tag: tag || `debit-${Date.now()}`
           });
 
           if (sendRes.success) {
@@ -200,7 +201,7 @@ async function processDebitReminders(options = {}) {
         }
       }
 
-      const pushSent = await sendPush(notificationTitle, notificationBody);
+      const pushSent = await sendPush(notificationTitle, notificationBody, `debit-${daysBefore}`);
 
       let emailSent = false;
       if (isEmailConfigured()) {
@@ -276,7 +277,7 @@ async function processDebitReminders(options = {}) {
             notificationBody = `Por favor verifique despesas sem valor: existem ${count} despesas (${names}) por preencher.`;
           }
 
-          const pushSent = await sendPush(notificationTitle, notificationBody);
+          const pushSent = await sendPush(notificationTitle, notificationBody, 'no-value-reminder');
 
           let emailSent = false;
           if (isEmailConfigured()) {
