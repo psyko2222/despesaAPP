@@ -2,8 +2,9 @@ name: Disparar Lembretes Diários
 
 on:
   schedule:
-    # Corre todos os dias às 09:00 UTC (10:00 em Lisboa / horário de verão)
-    - cron: '0 9 * * *'
+    # Corre todos os dias às 09:05 UTC (10:05 em Lisboa / horário de verão)
+    # O minuto :05 é o recomendado pelo GitHub para evitar o congestionamento mundial do minuto :00
+    - cron: '5 9 * * *'
   workflow_dispatch:
     inputs:
       force_day:
