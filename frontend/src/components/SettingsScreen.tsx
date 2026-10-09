@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -163,20 +163,20 @@ export function SettingsScreen() {
     }
   };
 
-    const handleDriveBackup = async (type: 'semanal' | 'mensal') => {
+  const handleDriveBackup = async (type: 'semanal' | 'mensal') => {
     setExporting(true);
     try {
       const res = await fetch('/api/google/manual-backup', {
         method: 'POST',
         headers: {
-          'Authorization': \Bearer \${localStorage.getItem('token')}\,
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ type })
       });
       const data = await res.json();
       if (res.ok) {
-        setSaveSuccess(data.message || \Backup \ gravado com sucesso no Google Drive!\);
+        setSaveSuccess(data.message || `Backup ${type} gravado com sucesso no Google Drive!`);
         setTimeout(() => setSaveSuccess(''), 5000);
       } else {
         alert(data.error || 'Erro ao realizar backup');
@@ -186,7 +186,8 @@ export function SettingsScreen() {
     }
     setExporting(false);
   };
-const handleExport = async () => {
+
+  const handleExport = async () => {
     setExporting(true);
     try {
       const response = await backupAPI.export();
