@@ -276,7 +276,8 @@ async function processDebitReminders(options = {}) {
 
 router.all('/check', verifyCronAuth, async (req, res) => {
   try {
-    const forceDay = req.query.forceDay ? parseInt(req.query.forceDay, 10) : undefined;
+    const rawForce = req.query?.forceDay || req.query?.forceday || req.query?.force_day || (req.body && req.body.forceDay);
+    const forceDay = rawForce !== undefined ? parseInt(rawForce, 10) : undefined;
     const details = await processDebitReminders({ forceDay });
     res.json({
       success: true,
