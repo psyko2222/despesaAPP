@@ -473,6 +473,9 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, async
 
     // If this is a recurring expense, update only this occurrence and future ones
     if (existing.recurring === 1 && existing.series_id) {
+      const rawFixedAmount = finalFixedAmount !== undefined ? finalFixedAmount : existing.fixed_amount;
+      const isFixed = rawFixedAmount === true || rawFixedAmount === 1 || rawFixedAmount === '1' || rawFixedAmount === 'true';
+
       // Update this specific occurrence
       const updateSql = isPostgres
         ? 'UPDATE expenses SET description = $1, amount_cents = $2, debit_date = $3, paid = $4, recurring = $5, fixed_amount = $6, original_day = $7, recurrence_months = $8, updated_at = CURRENT_TIMESTAMP WHERE id = $9 AND user_id = $10'
@@ -483,7 +486,7 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, async
         finalDebitDate,
         paid ? 1 : 0,
         recurring ? 1 : 0,
-        finalFixedAmount ? 1 : 0,
+        isFixed ? 1 : 0,
         day,
         normalizedMonths,
         id,
@@ -491,20 +494,40 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, async
       ]);
 
       // Update future occurrences (not past ones)
-      const updateFutureSql = isPostgres
-        ? 'UPDATE expenses SET description = $1, amount_cents = $2, fixed_amount = $3, original_day = $4, recurrence_months = $5, updated_at = CURRENT_TIMESTAMP WHERE series_id = $6 AND user_id = $7 AND debit_date > $8'
-        : 'UPDATE expenses SET description = ?, amount_cents = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, updated_at = CURRENT_TIMESTAMP WHERE series_id = ? AND user_id = ? AND debit_date > ?';
-      await run(updateFutureSql, [
-        description,
-        Math.round(finalAmount),
-        finalFixedAmount ? 1 : 0,
-        day,
-        normalizedMonths,
-        existing.series_id,
-        userId,
-        existing.debit_date
-      ]);
+      // REGRA: Se o valor for fixo ("valor sempre igual" ativado), o novo valor copia-se para os meses seguintes.
+      // Se "valor sempre igual" estiver desativado, o valor é variável para cada mês e NÃO deve sobrescrever os meses seguintes!
+      if (isFixed) {
+        const updateFutureSql = isPostgres
+          ? 'UPDATE expenses SET description = $1, amount_cents = $2, fixed_amount = $3, original_day = $4, recurrence_months = $5, updated_at = CURRENT_TIMESTAMP WHERE series_id = $6 AND user_id = $7 AND debit_date > $8'
+          : 'UPDATE expenses SET description = ?, amount_cents = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, updated_at = CURRENT_TIMESTAMP WHERE series_id = ? AND user_id = ? AND debit_date > ?';
+        await run(updateFutureSql, [
+          description,
+          Math.round(finalAmount),
+          1,
+          day,
+          normalizedMonths,
+          existing.series_id,
+          userId,
+          existing.debit_date
+        ]);
+      } else {
+        const updateFutureSql = isPostgres
+          ? 'UPDATE expenses SET description = $1, fixed_amount = $2, original_day = $3, recurrence_months = $4, updated_at = CURRENT_TIMESTAMP WHERE series_id = $5 AND user_id = $6 AND debit_date > $7'
+          : 'UPDATE expenses SET description = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, updated_at = CURRENT_TIMESTAMP WHERE series_id = ? AND user_id = ? AND debit_date > ?';
+        await run(updateFutureSql, [
+          description,
+          0,
+          day,
+          normalizedMonths,
+          existing.series_id,
+          userId,
+          existing.debit_date
+        ]);
+      }
     } else {
+      const rawFixedAmount = finalFixedAmount !== undefined ? finalFixedAmount : existing.fixed_amount;
+      const isFixed = rawFixedAmount === true || rawFixedAmount === 1 || rawFixedAmount === '1' || rawFixedAmount === 'true';
+
       // Non-recurring expense, just update this one
       const updateSql = isPostgres
         ? 'UPDATE expenses SET description = $1, amount_cents = $2, debit_date = $3, paid = $4, recurring = $5, fixed_amount = $6, original_day = $7, recurrence_months = $8, updated_at = CURRENT_TIMESTAMP WHERE id = $9 AND user_id = $10'
@@ -515,7 +538,7 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, async
         finalDebitDate,
         paid ? 1 : 0,
         recurring ? 1 : 0,
-        finalFixedAmount ? 1 : 0,
+        isFixed ? 1 : 0,
         day,
         normalizedMonths,
         id,
