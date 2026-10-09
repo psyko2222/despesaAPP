@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db, isPostgres, financialPeriod, currentFinancialPeriodMonth, query, queryOne, run } = require('../models/database');
 const webPushService = require('../services/webPushService');
+const { uploadBackup, rotateBackups } = require('../services/googleDriveService');
 
 const CRON_SECRET = process.env.CRON_SECRET || process.env.SEGREDO_CRON || 'despesas-cron-secret-key-change-this';
 
@@ -46,7 +47,7 @@ async function processDebitReminders(options = {}) {
 
   // 1. Obter utilizadores aprovados com notificações ativas
   const usersSql = `
-    SELECT u.id, u.email,
+    SELECT u.id, u.email, u.google_refresh_token,
            COALESCE(s.notifications_enabled, 1) as notifications_enabled,
            COALESCE(s.debit_notifications_enabled, 1) as debit_notifications_enabled,
            COALESCE(s.debit_reminder_days, 1) as debit_reminder_days,
@@ -56,7 +57,8 @@ async function processDebitReminders(options = {}) {
            COALESCE(s.no_value_reminder_enabled, 0) as no_value_reminder_enabled,
            COALESCE(s.no_value_reminder_days, '1,10,15,20') as no_value_reminder_days,
            COALESCE(s.backup_reminder_enabled, 1) as backup_reminder_enabled,
-           COALESCE(s.backup_reminder_day, 21) as backup_reminder_day
+           COALESCE(s.backup_reminder_day, 21) as backup_reminder_day,
+           COALESCE(s.drive_backup_enabled, 0) as drive_backup_enabled
     FROM users u
     JOIN settings s ON u.id = s.user_id
     WHERE u.status = 'approved' AND (
@@ -65,6 +67,7 @@ async function processDebitReminders(options = {}) {
       s.same_day_reminder_enabled = 1 OR 
       s.no_value_reminder_enabled = 1 OR 
       s.backup_reminder_enabled = 1 OR 
+      s.drive_backup_enabled = 1 OR
       s.notifications_enabled = 1
     )
   `;
@@ -266,6 +269,67 @@ async function processDebitReminders(options = {}) {
           currentDay,
           pushSent
         });
+      }
+    }
+
+    // Backup Automático para o Google Drive
+    const driveBackupEnabled = parseInt(user.drive_backup_enabled, 10) === 1 || user.drive_backup_enabled == 1;
+    if (driveBackupEnabled && user.google_refresh_token) {
+      const lisbonDate = new Date();
+      const currentDay = lisbonDate.getDay(); // 0 = Sunday, 1 = Monday
+      const currentDate = lisbonDate.getDate(); // 1-31
+      const targetBackupDay = parseInt(user.backup_reminder_day, 10) || 21;
+
+      const isWeekly = (currentDay === 1); // Segunda-feira
+      const isMonthly = (currentDate === targetBackupDay);
+
+      if (isWeekly || isMonthly) {
+        try {
+          // Gerar os dados do backup
+          const expensesSql = isPostgres
+            ? 'SELECT * FROM expenses WHERE user_id = $1 ORDER BY id'
+            : 'SELECT * FROM expenses WHERE user_id = ? ORDER BY id';
+          const expensesResult = await query(expensesSql, [user.id]);
+          const userExpenses = isPostgres ? expensesResult.rows : expensesResult;
+
+          const settingsSql = isPostgres
+            ? 'SELECT * FROM settings WHERE user_id = $1'
+            : 'SELECT * FROM settings WHERE user_id = ?';
+          const userSettings = await queryOne(settingsSql, [user.id]);
+
+          const backupData = JSON.stringify({
+            format_version: 1,
+            exported_at: lisbonDate.toISOString(),
+            user_id: user.id,
+            expenses: userExpenses,
+            settings: userSettings
+          }, null, 2);
+
+          const dateStr = lisbonDate.toISOString().split('T')[0];
+          
+          if (isWeekly) {
+            const fileName = `backup_semanal_${dateStr}.json`;
+            await uploadBackup(user.google_refresh_token, backupData, fileName);
+            await rotateBackups(user.google_refresh_token, 'backup_semanal_', 2); // Manter os últimos 2
+          }
+
+          if (isMonthly) {
+            const fileName = `backup_mensal_${dateStr}.json`;
+            await uploadBackup(user.google_refresh_token, backupData, fileName);
+            // Mensais não são apagados por defeito (ou poderíamos rodar 12)
+          }
+
+          results.push({
+            userId: user.id,
+            email: user.email,
+            type: 'google_drive_backup',
+            weekly: isWeekly,
+            monthly: isMonthly
+          });
+        } catch (err) {
+          console.error('Erro ao fazer backup para o Google Drive', err);
+          // Opcional: enviar notificação push de erro de backup
+        }
       }
     }
   }

@@ -26,6 +26,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/logs', require('./routes/logs'));
 app.use('/api/push', require('./routes/push'));
 app.use('/api/reminders', require('./routes/reminders'));
+app.use('/api/google', require('./routes/google'));
 
 // Health check
 app.get(['/health', '/api/health'], (req, res) => {

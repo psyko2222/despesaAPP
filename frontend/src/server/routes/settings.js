@@ -27,6 +27,11 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
+    // Garantir que as colunas Google Drive existem
+    try {
+      await run('ALTER TABLE settings ADD COLUMN IF NOT EXISTS drive_backup_enabled INTEGER DEFAULT 0');
+    } catch (e) {}
+
     const sql = isPostgres
       ? 'SELECT * FROM settings WHERE user_id = $1'
       : 'SELECT * FROM settings WHERE user_id = ?';
@@ -76,7 +81,8 @@ router.put('/', authenticateToken, async (req, res) => {
       no_value_reminder_enabled,
       no_value_reminder_days,
       backup_reminder_enabled,
-      backup_reminder_day
+      backup_reminder_day,
+      drive_backup_enabled
     } = req.body;
 
     // Build dynamic update query to handle undefined values
@@ -84,6 +90,10 @@ router.put('/', authenticateToken, async (req, res) => {
     const params = [];
     let paramIndex = 1;
 
+    if (drive_backup_enabled !== undefined) {
+      updates.push(isPostgres ? `drive_backup_enabled = $${paramIndex++}` : `drive_backup_enabled = ?`);
+      params.push(drive_backup_enabled ? 1 : 0);
+    }
     if (backup_reminder_enabled !== undefined) {
       updates.push(isPostgres ? `backup_reminder_enabled = $${paramIndex++}` : `backup_reminder_enabled = ?`);
       params.push(backup_reminder_enabled ? 1 : 0);
