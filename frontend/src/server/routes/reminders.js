@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const { db, isPostgres, financialPeriod, currentFinancialPeriodMonth, query, queryOne, run } = require('../models/database');
 const webPushService = require('../services/webPushService');
@@ -6,9 +6,9 @@ const { uploadBackup, rotateBackups } = require('../services/googleDriveService'
 
 const CRON_SECRET = process.env.CRON_SECRET || process.env.SEGREDO_CRON || 'despesas-cron-secret-key-change-this';
 
-// Middleware para autorizar a execução do despertador (Vercel Cron, GitHub Actions ou Admin)
+// Middleware para autorizar a execuÃ§Ã£o do despertador (Vercel Cron, GitHub Actions ou Admin)
 function verifyCronAuth(req, res, next) {
-  // 1. Autorização automática para Vercel Cron
+  // 1. AutorizaÃ§Ã£o automÃ¡tica para Vercel Cron
   if (req.headers['x-vercel-cron']) {
     return next();
   }
@@ -24,7 +24,7 @@ function verifyCronAuth(req, res, next) {
     return next();
   }
 
-  // Se não foi fornecido o segredo do cron, verifica se é um JWT de admin válido
+  // Se nÃ£o foi fornecido o segredo do cron, verifica se Ã© um JWT de admin vÃ¡lido
   const jwt = require('jsonwebtoken');
   const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
 
@@ -38,14 +38,14 @@ function verifyCronAuth(req, res, next) {
     }
   }
 
-  return res.status(401).json({ error: 'Acesso não autorizado ao endpoint de lembretes.' });
+  return res.status(401).json({ error: 'Acesso nÃ£o autorizado ao endpoint de lembretes.' });
 }
 
-// Processa e envia os lembretes de débito por Web Push
+// Processa e envia os lembretes de dÃ©bito por Web Push
 async function processDebitReminders(options = {}) {
-  console.log('=== A processar lembretes diários ===', new Date().toISOString());
+  console.log('=== A processar lembretes diÃ¡rios ===', new Date().toISOString());
 
-  // 1. Obter utilizadores aprovados com notificações ativas
+  // 1. Obter utilizadores aprovados com notificaÃ§Ãµes ativas
   const usersSql = `
     SELECT u.id, u.email, u.google_refresh_token,
            COALESCE(s.notifications_enabled, 1) as notifications_enabled,
@@ -80,7 +80,7 @@ async function processDebitReminders(options = {}) {
   for (const user of users) {
     if (user.notifications_enabled === 0) continue;
 
-    // Obter subscrições Web Push do utilizador
+    // Obter subscriÃ§Ãµes Web Push do utilizador
     const subsSql = 'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1';
     const subsResult = await query(subsSql, [user.id]);
     const subscriptions = subsResult.rows || subsResult;
@@ -108,7 +108,7 @@ async function processDebitReminders(options = {}) {
       return pushSent;
     };
 
-    // Lembretes de Débito
+    // Lembretes de DÃ©bito
     const reminderOffsets = [];
 
     if (user.debit_notifications_enabled === 1) {
@@ -148,28 +148,28 @@ async function processDebitReminders(options = {}) {
 
       if (expenses.length === 1) {
         const exp = expenses[0];
-        const valStr = exp.amount_cents > 0 ? ` (${(exp.amount_cents / 100).toFixed(2)}€)` : '';
+        const valStr = exp.amount_cents > 0 ? ` (${(exp.amount_cents / 100).toFixed(2)}â‚¬)` : '';
         if (daysBefore === 0) {
-          notificationTitle = '⚠️ Atenção: Débito Hoje por Pagar';
-          notificationBody = `A despesa "${exp.description}"${valStr} debita hoje e ainda não foi paga!`;
+          notificationTitle = 'âš ï¸ AtenÃ§Ã£o: DÃ©bito Hoje por Pagar';
+          notificationBody = `A despesa "${exp.description}"${valStr} debita hoje e ainda nÃ£o foi paga!`;
         } else if (daysBefore === 1) {
-          notificationTitle = '⚠️ Atenção: Débito Agendado para Amanhã';
-          notificationBody = `A despesa "${exp.description}"${valStr} irá ser debitada amanhã (dia ${formattedDate}).`;
+          notificationTitle = 'âš ï¸ AtenÃ§Ã£o: DÃ©bito Agendado para AmanhÃ£';
+          notificationBody = `A despesa "${exp.description}"${valStr} irÃ¡ ser debitada amanhÃ£ (dia ${formattedDate}).`;
         } else {
-          notificationTitle = `⚠️ Atenção: Débito em ${daysBefore} dias`;
-          notificationBody = `A despesa "${exp.description}"${valStr} irá ser debitada no dia ${formattedDate}.`;
+          notificationTitle = `âš ï¸ AtenÃ§Ã£o: DÃ©bito em ${daysBefore} dias`;
+          notificationBody = `A despesa "${exp.description}"${valStr} irÃ¡ ser debitada no dia ${formattedDate}.`;
         }
       } else {
         const names = expenses.map(e => e.description).slice(0, 3).join(', ') + (expenses.length > 3 ? '...' : '');
         if (daysBefore === 0) {
-          notificationTitle = `⚠️ Atenção: ${expenses.length} Despesas Hoje por Pagar`;
-          notificationBody = `As despesas (${names}) num total de ${totalEur}€ debitam hoje e ainda não foram pagas!`;
+          notificationTitle = `âš ï¸ AtenÃ§Ã£o: ${expenses.length} Despesas Hoje por Pagar`;
+          notificationBody = `As despesas (${names}) num total de ${totalEur}â‚¬ debitam hoje e ainda nÃ£o foram pagas!`;
         } else if (daysBefore === 1) {
-          notificationTitle = `⚠️ Atenção: ${expenses.length} Despesas a Debitar Amanhã`;
-          notificationBody = `As despesas (${names}) num total de ${totalEur}€ irão ser debitadas amanhã (dia ${formattedDate}).`;
+          notificationTitle = `âš ï¸ AtenÃ§Ã£o: ${expenses.length} Despesas a Debitar AmanhÃ£`;
+          notificationBody = `As despesas (${names}) num total de ${totalEur}â‚¬ irÃ£o ser debitadas amanhÃ£ (dia ${formattedDate}).`;
         } else {
-          notificationTitle = `⚠️ Atenção: ${expenses.length} Despesas em ${daysBefore} dias`;
-          notificationBody = `As despesas (${names}) num total de ${totalEur}€ irão ser debitadas no dia ${formattedDate}.`;
+          notificationTitle = `âš ï¸ AtenÃ§Ã£o: ${expenses.length} Despesas em ${daysBefore} dias`;
+          notificationBody = `As despesas (${names}) num total de ${totalEur}â‚¬ irÃ£o ser debitadas no dia ${formattedDate}.`;
         }
       }
 
@@ -187,7 +187,7 @@ async function processDebitReminders(options = {}) {
       });
     }
 
-    // Verificação de Despesas Sem Valor (Dias 1, 10, 15, 20)
+    // VerificaÃ§Ã£o de Despesas Sem Valor (Dias 1, 10, 15, 20)
     if (user.no_value_reminder_enabled === 1) {
       const lisbonParts = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Europe/Lisbon',
@@ -219,11 +219,11 @@ async function processDebitReminders(options = {}) {
 
         if (noValExpenses && noValExpenses.length > 0) {
           const count = noValExpenses.length;
-          const notificationTitle = '⚠️ Atenção: Despesas Sem Valor';
+          const notificationTitle = 'âš ï¸ AtenÃ§Ã£o: Despesas Sem Valor';
           let notificationBody = '';
 
           if (count === 1) {
-            notificationBody = `Por favor verifique despesas sem valor: "${noValExpenses[0].description}" ainda não tem valor definido.`;
+            notificationBody = `Por favor verifique despesas sem valor: "${noValExpenses[0].description}" ainda nÃ£o tem valor definido.`;
           } else {
             const names = noValExpenses.map(e => e.description).slice(0, 3).join(', ') + (count > 3 ? '...' : '');
             notificationBody = `Por favor verifique despesas sem valor: existem ${count} despesas (${names}) por preencher.`;
@@ -243,7 +243,7 @@ async function processDebitReminders(options = {}) {
       }
     }
 
-    // Verificação de Lembrete Mensal de Backup
+    // VerificaÃ§Ã£o de Lembrete Mensal de Backup
     const backupEnabled = parseInt(user.backup_reminder_enabled, 10) === 1 || user.backup_reminder_enabled == 1;
     if (backupEnabled) {
       const lisbonParts = new Intl.DateTimeFormat('en-CA', {
@@ -258,8 +258,8 @@ async function processDebitReminders(options = {}) {
       const targetBackupDay = parseInt(user.backup_reminder_day, 10) || 21;
 
       if (currentDay === targetBackupDay) {
-        const notificationTitle = '💾 Lembrete: Cópia de Segurança Mensal';
-        const notificationBody = 'O ciclo do mês fechou. Clique para descarregar o backup dos seus dados.';
+        const notificationTitle = 'ðŸ’¾ Lembrete: CÃ³pia de SeguranÃ§a Mensal';
+        const notificationBody = 'O ciclo do mÃªs fechou. Clique para descarregar o backup dos seus dados.';
         const pushSent = await sendPush(notificationTitle, notificationBody, 'monthly-backup-reminder');
 
         results.push({
@@ -272,7 +272,7 @@ async function processDebitReminders(options = {}) {
       }
     }
 
-    // Backup Automático para o Google Drive
+    // Backup AutomÃ¡tico para o Google Drive
     const driveBackupEnabled = parseInt(user.drive_backup_enabled, 10) === 1 || user.drive_backup_enabled == 1;
     if (driveBackupEnabled && user.google_refresh_token) {
       const lisbonDate = new Date();
@@ -310,15 +310,23 @@ async function processDebitReminders(options = {}) {
           if (isWeekly) {
             const fileName = `backup_semanal_${dateStr}.json`;
             await uploadBackup(user.google_refresh_token, backupData, fileName, isWeekly ? 'semanal' : 'mensal');
-            await rotateBackups(user.google_refresh_token, 'semanal', 2); // Manter os últimos 2
+            await rotateBackups(user.google_refresh_token, 'semanal', 2); // Manter os Ãºltimos 2
           }
 
           if (isMonthly) {
             const fileName = `backup_mensal_${dateStr}.json`;
             await uploadBackup(user.google_refresh_token, backupData, fileName, isWeekly ? 'semanal' : 'mensal');
-            // Mensais não são apagados por defeito (ou poderíamos rodar 12)
+            // Mensais nÃ£o sÃ£o apagados por defeito (ou poderÃ­amos rodar 12)
           }
 
+          const isPostgres = require('../models/database').isPostgres;
+          const query = require('../models/database').query;
+          const msg = 'Backup automático ' + (isWeekly ? 'semanal' : 'mensal') + ' gravado com sucesso!';
+          const sql = isPostgres 
+            ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
+            : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
+          await query(sql, [user.id, 'Backup Google Drive', msg, 'success']);
+          
           results.push({
             userId: user.id,
             email: user.email,
@@ -328,7 +336,7 @@ async function processDebitReminders(options = {}) {
           });
         } catch (err) {
           console.error('Erro ao fazer backup para o Google Drive', err);
-          // Opcional: enviar notificação push de erro de backup
+          // Opcional: enviar notificaÃ§Ã£o push de erro de backup
         }
       }
     }

@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const cors = require('cors');
 
 const app = express();
@@ -27,15 +27,16 @@ app.use('/api/logs', require('./routes/logs'));
 app.use('/api/push', require('./routes/push'));
 app.use('/api/reminders', require('./routes/reminders'));
 app.use('/api/google', require('./routes/google'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Health check
 app.get(['/health', '/api/health'], (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Tratamento de rota não encontrada
+// Tratamento de rota nÃ£o encontrada
 app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint não encontrado' });
+  res.status(404).json({ error: 'Endpoint nÃ£o encontrado' });
 });
 
 // Tratamento global de erros

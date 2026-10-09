@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { Home, Repeat, BarChart3, Settings, Users, Plus, Trash2, Edit, CheckCircle2, Circle, Search, Calendar, AlertTriangle, X, ChevronDown, FileDown } from 'lucide-react';
+import { Home, Repeat, BarChart3, Settings, Users, Plus, Trash2, Edit, CheckCircle2, Circle, Search, Calendar, AlertTriangle, X, ChevronDown, FileDown, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ExpenseForm } from '@/components/ExpenseForm';
@@ -17,6 +17,7 @@ import { BottomNav, Tab } from '@/components/BottomNav';
 import { MonthPickerModal } from '@/components/MonthPickerModal';
 import { InstallGuideModal } from '@/components/InstallGuideModal';
 import { ChartsModal } from '@/components/ChartsModal';
+import { NotificationsModal } from '@/components/NotificationsModal';
 import { formatMoney, formatDate, currentFinancialPeriodMonth, getNextMonth, getPreviousMonth, getFinancialPeriodDisplay, recurrenceLabel, getPaymentDeadlines, financialPeriod, formatAmount } from '@/lib/utils';
 import { exportMonthlyReportPdf, exportRecurringExpensesPdf } from '@/lib/pdfExport';
 import { expensesAPI, sharesAPI } from '@/lib/api';
@@ -52,6 +53,53 @@ export default function HomePage() {
   const [installPrompt, setInstallPrompt] = useState<any>(null);
 
   const [showCharts, setShowCharts] = useState(false);
+  
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  
+  const fetchNotifications = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const res = await fetch('/api/notifications', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
+  const markNotificationsAsRead = async (ids?: number[]) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      await fetch('/api/notifications/mark-read', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ids })
+      });
+      fetchNotifications();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const unreadCount = useMemo(() => notifications.filter(n => !n.is_read).length, [notifications]);
 
   // Totais e prazos calculados de forma reativa
   const totalExpenses = useMemo(() => expenses.reduce((sum, exp) => sum + exp.amount_cents, 0), [expenses]);
@@ -347,9 +395,19 @@ export default function HomePage() {
               </select>
             )}
           </div>
-          <Button variant="ghost" onClick={handleLogout} className="text-sm sm:text-base">
-            Sair
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" onClick={() => setIsNotificationsOpen(true)} className="relative">
+              <Bell className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Button>
+            <Button variant="ghost" onClick={handleLogout} className="text-sm sm:text-base">
+              Sair
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -1005,6 +1063,14 @@ export default function HomePage() {
         onClose={() => setShowCharts(false)}
         currentMonthKey={currentMonth}
         userId={selectedAccount ? selectedAccount.id : undefined}
+      />
+
+      {/* Modal de Notificações */}
+      <NotificationsModal
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        notifications={notifications}
+        onMarkAsRead={markNotificationsAsRead}
       />
     </div>
   );

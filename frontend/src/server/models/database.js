@@ -1,4 +1,4 @@
-const { Pool } = require('pg');
+﻿const { Pool } = require('pg');
 
 let pool = null;
 
@@ -127,7 +127,7 @@ async function initializeDatabase() {
         new_password VARCHAR(255)
       );
 
-      CREATE TABLE IF NOT EXISTS error_logs (
+      CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, title VARCHAR(255) NOT NULL, message TEXT NOT NULL, type VARCHAR(50) DEFAULT 'info', is_read INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id); CREATE TABLE IF NOT EXISTS error_logs (
         id SERIAL PRIMARY KEY,
         level VARCHAR(50) DEFAULT 'error' CHECK(level IN ('error', 'warning', 'info')),
         message TEXT NOT NULL,

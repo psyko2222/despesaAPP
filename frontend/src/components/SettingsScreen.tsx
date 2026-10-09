@@ -618,7 +618,7 @@ export function SettingsScreen() {
                               type="checkbox"
                               checked={isChecked}
                               onChange={() => {
-                                let updated: string[];
+                                let updated;
                                 if (isChecked) {
                                   updated = currentDaysList.filter((d) => d !== day);
                                 } else {
