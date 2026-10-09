@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -163,7 +163,30 @@ export function SettingsScreen() {
     }
   };
 
-  const handleExport = async () => {
+    const handleDriveBackup = async (type: 'semanal' | 'mensal') => {
+    setExporting(true);
+    try {
+      const res = await fetch('/api/google/manual-backup', {
+        method: 'POST',
+        headers: {
+          'Authorization': \Bearer \${localStorage.getItem('token')}\,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ type })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSaveSuccess(data.message || \Backup \ gravado com sucesso no Google Drive!\);
+        setTimeout(() => setSaveSuccess(''), 5000);
+      } else {
+        alert(data.error || 'Erro ao realizar backup');
+      }
+    } catch (e) {
+      alert('Erro de ligacao ao servidor.');
+    }
+    setExporting(false);
+  };
+const handleExport = async () => {
     setExporting(true);
     try {
       const response = await backupAPI.export();
@@ -659,56 +682,6 @@ export function SettingsScreen() {
                 )}
               </div>
 
-              {/* 6º Backup Automático Google Drive */}
-              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-gray-800 dark:text-gray-200 font-medium cursor-pointer flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={(settings.drive_backup_enabled ?? 0) === 1}
-                      onChange={(e) => {
-                        if (e.target.checked && (settings.drive_backup_enabled ?? 0) === 0) {
-                          // Iniciar flow do Google OAuth
-                          fetch('/api/google/url', {
-                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                          }).then(res => res.json()).then(data => {
-                            if (data.url) window.location.href = data.url;
-                          });
-                        } else {
-                          // Desativar apenas no toggle (ou desconectar)
-                          setSettings({ ...settings, drive_backup_enabled: 0 });
-                        }
-                      }}
-                      className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
-                    />
-                    <span>☁️ Backup Automático Google Drive</span>
-                  </label>
-                  {(settings.drive_backup_enabled ?? 0) === 1 ? (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">Ligado</span>
-                  ) : (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Desligado</span>
-                  )}
-                </div>
-
-                <p className="text-xs text-gray-500 dark:text-gray-400 pl-6">
-                  Guarda automaticamente uma cópia de segurança na tua conta Google Drive todas as semanas e no dia 21. Mantém sempre os últimos 2 backups semanais.
-                </p>
-                
-                {(settings.drive_backup_enabled ?? 0) === 1 && (
-                  <div className="pl-6 pt-1">
-                     <button 
-                       onClick={() => {
-                          fetch('/api/google/disconnect', { 
-                            method: 'POST', 
-                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } 
-                          }).then(() => setSettings({ ...settings, drive_backup_enabled: 0 }));
-                       }}
-                       className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 font-medium bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 px-2 py-1 rounded transition-colors"
-                     >
-                       Desligar Conta Google
-                     </button>
-                  </div>
-                )}
               </div>
 
               <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg text-blue-900 dark:text-blue-200 text-xs leading-relaxed">
@@ -859,7 +832,69 @@ export function SettingsScreen() {
             <CardTitle>Dados</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
+            
+              <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 mt-4">Backup (Google Drive)</h3>
+              {/* 6º Backup Automático Google Drive */}
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-gray-800 dark:text-gray-200 font-medium cursor-pointer flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={(settings.drive_backup_enabled ?? 0) === 1}
+                      onChange={(e) => {
+                        if (e.target.checked && (settings.drive_backup_enabled ?? 0) === 0) {
+                          // Iniciar flow do Google OAuth
+                          fetch('/api/google/url', {
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                          }).then(res => res.json()).then(data => {
+                            if (data.url) window.location.href = data.url;
+                          });
+                        } else {
+                          // Desativar apenas no toggle (ou desconectar)
+                          setSettings({ ...settings, drive_backup_enabled: 0 });
+                        }
+                      }}
+                      className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
+                    />
+                    <span>☁️ Backup Automático Google Drive</span>
+                  </label>
+                  {(settings.drive_backup_enabled ?? 0) === 1 ? (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">Ligado</span>
+                  ) : (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Desligado</span>
+                  )}
+                </div>
+
+                <p className="text-xs text-gray-500 dark:text-gray-400 pl-6">
+                  Guarda automaticamente uma cópia de segurança na tua conta Google Drive todas as semanas e no dia 21. Mantém sempre os últimos 2 backups semanais.
+                </p>
+                
+                {(settings.drive_backup_enabled ?? 0) === 1 && (
+                  <div className="pl-6 pt-1">
+                     <button 
+                       onClick={() => {
+                          fetch('/api/google/disconnect', { 
+                            method: 'POST', 
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } 
+                          }).then(() => setSettings({ ...settings, drive_backup_enabled: 0 }));
+                       }}
+                       className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 font-medium bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 px-2 py-1 rounded transition-colors"
+                     >
+                       Desligar Conta Google
+                     </button>
+                  </div>
+                )}
+              
+              
+              <div className="flex gap-2 mt-2 mb-4">
+                 <Button onClick={() => handleDriveBackup('semanal')} disabled={exporting} className="w-full text-xs" variant="outline">
+                    Gerar Backup Semanal
+                 </Button>
+                 <Button onClick={() => handleDriveBackup('mensal')} disabled={exporting} className="w-full text-xs" variant="outline">
+                    Gerar Backup Mensal
+                 </Button>
+              </div>
+              <hr className="my-4 border-gray-200 dark:border-gray-800" /><div>
               <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Backup</h3>
               <Button
                 onClick={handleExport}

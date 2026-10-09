@@ -3,7 +3,7 @@
 -- Este ficheiro contém todas as tabelas, índices e restrições da versão mais recente.
 -- ==============================================================================
 
--- 1. Tabela de Utilizadores
+-- 1. Tabela de Utilizador
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,

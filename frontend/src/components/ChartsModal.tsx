@@ -260,3 +260,4 @@ export function ChartsModal({ isOpen, onClose, currentMonthKey, userId }: Charts
     </div>
   );
 }
+

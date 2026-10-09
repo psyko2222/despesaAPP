@@ -309,13 +309,13 @@ async function processDebitReminders(options = {}) {
           
           if (isWeekly) {
             const fileName = `backup_semanal_${dateStr}.json`;
-            await uploadBackup(user.google_refresh_token, backupData, fileName);
-            await rotateBackups(user.google_refresh_token, 'backup_semanal_', 2); // Manter os últimos 2
+            await uploadBackup(user.google_refresh_token, backupData, fileName, isWeekly ? 'semanal' : 'mensal');
+            await rotateBackups(user.google_refresh_token, 'semanal', 2); // Manter os últimos 2
           }
 
           if (isMonthly) {
             const fileName = `backup_mensal_${dateStr}.json`;
-            await uploadBackup(user.google_refresh_token, backupData, fileName);
+            await uploadBackup(user.google_refresh_token, backupData, fileName, isWeekly ? 'semanal' : 'mensal');
             // Mensais não são apagados por defeito (ou poderíamos rodar 12)
           }
 
