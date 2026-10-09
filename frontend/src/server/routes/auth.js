@@ -38,8 +38,8 @@ router.post('/register', async (req, res) => {
 
     console.log('Counting users...');
     const userCount = await queryOne('SELECT COUNT(*) as count FROM users');
-    console.log('User count:', userCount);
-    const isFirstUser = userCount.count === 0;
+    const count = parseInt(userCount?.count || '0', 10);
+    const isFirstUser = count === 0;
     const status = isFirstUser ? 'approved' : 'pending';
     const role = isFirstUser ? 'admin' : 'user';
     console.log('User will be:', { status, role, isFirstUser });
