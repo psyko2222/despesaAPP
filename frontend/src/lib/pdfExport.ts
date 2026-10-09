@@ -370,3 +370,4 @@ export function exportRecurringExpensesPdf(data: RecurringReportData) {
 
   doc.save('despesas-regulares-recorrentes.pdf');
 }
+
