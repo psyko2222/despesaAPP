@@ -23,10 +23,8 @@ jobs:
           echo "⏰ A iniciar rotina de lembretes diários: $(date -u)"
           echo "======================================================="
 
-          SECRET="${{ secrets.CRON_SECRET }}"
-          if [ -z "$SECRET" ]; then
-            SECRET="despesas-cron-secret-key-change-this"
-          fi
+          # Chave de segurança sincronizada com a Vercel
+          SECRET="despesas-cron-secret-key-change-this"
 
           URL="https://despesa-app.vercel.app/api/reminders/check?secret=${SECRET}"
           
