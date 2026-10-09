@@ -615,6 +615,8 @@ export function SettingsScreen() {
                     </div>
                   </div>
                 )}
+              </div>
+
               {/* 5º Lembrete Mensal de Backup */}
               <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
                 <div className="flex items-center justify-between">

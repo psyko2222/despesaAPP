@@ -1,5 +1,3 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { Expense } from '@/types';
 import { formatMoney, formatDate, recurrenceLabel } from '@/lib/utils';
 
@@ -18,7 +16,12 @@ export interface RecurringReportData {
 /**
  * Exporta o extrato do mês/período financeiro em formato PDF.
  */
-export function exportMonthlyReportPdf(data: MonthlyReportData) {
+export async function exportMonthlyReportPdf(data: MonthlyReportData) {
+  if (typeof window === 'undefined') return;
+  const { jsPDF } = await import('jspdf');
+  const autoTableModule = await import('jspdf-autotable');
+  const autoTable = (autoTableModule.default || autoTableModule) as any;
+
   const { periodDisplay, monthKey, expenses, userEmail } = data;
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -187,7 +190,12 @@ export function exportMonthlyReportPdf(data: MonthlyReportData) {
 /**
  * Exporta o relatório completo de todas as despesas recorrentes registadas.
  */
-export function exportRecurringExpensesPdf(data: RecurringReportData) {
+export async function exportRecurringExpensesPdf(data: RecurringReportData) {
+  if (typeof window === 'undefined') return;
+  const { jsPDF } = await import('jspdf');
+  const autoTableModule = await import('jspdf-autotable');
+  const autoTable = (autoTableModule.default || autoTableModule) as any;
+
   const { expenses, userEmail } = data;
   const doc = new jsPDF({
     orientation: 'portrait',
