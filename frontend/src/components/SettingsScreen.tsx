@@ -176,13 +176,12 @@ export function SettingsScreen() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSaveSuccess(data.message || `Backup ${type} gravado com sucesso no Google Drive!`);
-        setTimeout(() => setSaveSuccess(''), 5000);
+        toast.success(data.message || `Backup ${type} gravado com sucesso no Google Drive!`);
       } else {
-        alert(data.error || 'Erro ao realizar backup');
+        toast.error(data.error || 'Erro ao realizar backup');
       }
     } catch (e) {
-      alert('Erro de ligacao ao servidor.');
+      toast.error('Erro de ligacao ao servidor.');
     }
     setExporting(false);
   };
