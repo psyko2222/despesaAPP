@@ -16,6 +16,7 @@ import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { BottomNav, Tab } from '@/components/BottomNav';
 import { MonthPickerModal } from '@/components/MonthPickerModal';
 import { InstallGuideModal } from '@/components/InstallGuideModal';
+import { ChartsModal } from '@/components/ChartsModal';
 import { formatMoney, formatDate, currentFinancialPeriodMonth, getNextMonth, getPreviousMonth, getFinancialPeriodDisplay, recurrenceLabel, getPaymentDeadlines, financialPeriod, formatAmount } from '@/lib/utils';
 import { exportMonthlyReportPdf, exportRecurringExpensesPdf } from '@/lib/pdfExport';
 import { expensesAPI, sharesAPI } from '@/lib/api';
@@ -49,6 +50,8 @@ export default function HomePage() {
   // Onboarding de Instalação (PWA)
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  const [showCharts, setShowCharts] = useState(false);
 
   // Totais e prazos calculados de forma reativa
   const totalExpenses = useMemo(() => expenses.reduce((sum, exp) => sum + exp.amount_cents, 0), [expenses]);
@@ -420,21 +423,33 @@ export default function HomePage() {
               <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
                 {expenses.length} {expenses.length === 1 ? 'despesa no ciclo' : 'despesas no ciclo'}
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => exportMonthlyReportPdf({
-                  periodDisplay: getFinancialPeriodDisplay(currentMonth),
-                  monthKey: currentMonth,
-                  expenses,
-                  userEmail: selectedAccount ? selectedAccount.email : user?.email
-                })}
-                disabled={expenses.length === 0}
-                className="text-xs h-8 flex items-center gap-1.5 border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-950/40"
-              >
-                <FileDown className="w-3.5 h-3.5" />
-                <span>Exportar Extrato (PDF)</span>
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCharts(true)}
+                  disabled={expenses.length === 0}
+                  className="text-xs h-8 flex items-center gap-1.5 border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-950/40"
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Gráficos</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => exportMonthlyReportPdf({
+                    periodDisplay: getFinancialPeriodDisplay(currentMonth),
+                    monthKey: currentMonth,
+                    expenses,
+                    userEmail: selectedAccount ? selectedAccount.email : user?.email
+                  })}
+                  disabled={expenses.length === 0}
+                  className="text-xs h-8 flex items-center gap-1.5 border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-950/40"
+                >
+                  <FileDown className="w-3.5 h-3.5" />
+                  <span>Exportar Extrato (PDF)</span>
+                </Button>
+              </div>
             </div>
 
             {/* Resumo do Mês - Versão Mobile Compacta (sm:hidden) */}
@@ -982,6 +997,14 @@ export default function HomePage() {
         onClose={() => setShowInstallGuide(false)}
         onInstall={handleInstallApp}
         canInstallDirectly={!!installPrompt}
+      />
+
+      {/* Modal de Gráficos e Estatísticas */}
+      <ChartsModal
+        isOpen={showCharts}
+        onClose={() => setShowCharts(false)}
+        currentMonthKey={currentMonth}
+        userId={selectedAccount ? selectedAccount.id : undefined}
       />
     </div>
   );

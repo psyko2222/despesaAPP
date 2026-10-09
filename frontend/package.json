@@ -28,7 +28,8 @@
     "tailwind-merge": "^2.1.0",
     "web-push": "^3.6.7",
     "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.8.2"
+    "jspdf-autotable": "^3.8.2",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
