@@ -1,10 +1,5 @@
 /** @type {import('next').NextConfig} */
 
-// Remove barras no final e garante que o protocolo está correto
-let rawUrl = process.env.NEXT_PUBLIC_API_URL || 'https://despesaapp.onrender.com';
-rawUrl = rawUrl.replace(/\/+$/, ''); // Remove / do final se existir
-const formattedUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
-
 // Data e hora do build formatada em hora de Portugal (Europe/Lisbon)
 const buildTime = new Date().toLocaleString('pt-PT', {
   timeZone: 'Europe/Lisbon',
@@ -25,16 +20,8 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   env: {
-    NEXT_PUBLIC_API_URL: formattedUrl,
+    NEXT_PUBLIC_API_URL: '',
     NEXT_PUBLIC_BUILD_TIME: buildTime,
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${formattedUrl}/api/:path*`,
-      },
-    ];
   },
 };
 
