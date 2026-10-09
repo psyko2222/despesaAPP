@@ -683,8 +683,6 @@ export function SettingsScreen() {
                 )}
               </div>
 
-              </div>
-
               <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg text-blue-900 dark:text-blue-200 text-xs leading-relaxed">
                 ℹ️ <strong>Horário Fixo:</strong> Os lembretes são verificados e enviados diariamente às <strong>10:00</strong> da manhã diretamente para as notificações do seu dispositivo.
               </div>
@@ -885,7 +883,7 @@ export function SettingsScreen() {
                      </button>
                   </div>
                 )}
-              
+              </div>
               
               <div className="flex gap-2 mt-2 mb-4">
                  <Button onClick={() => handleDriveBackup('semanal')} disabled={exporting} className="w-full text-xs" variant="outline">
