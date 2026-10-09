@@ -58,7 +58,9 @@ CREATE TABLE IF NOT EXISTS settings (
     second_debit_reminder_days INTEGER DEFAULT 0,
     same_day_reminder_enabled INTEGER DEFAULT 1,
     no_value_reminder_enabled INTEGER DEFAULT 0,
-    no_value_reminder_days VARCHAR(50) DEFAULT '1,10,15,20'
+    no_value_reminder_days VARCHAR(50) DEFAULT '1,10,15,20',
+    backup_reminder_enabled INTEGER DEFAULT 1,
+    backup_reminder_day INTEGER DEFAULT 21
 );
 
 -- 4. Tabela de Partilha de Contas (Multi-utilizador)

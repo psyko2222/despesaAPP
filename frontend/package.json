@@ -26,7 +26,9 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "tailwind-merge": "^2.1.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

@@ -57,3 +57,8 @@ tmp/
 
 # Firebase credentials
 firebase-service-account.json
+
+# Backups and local archives
+backup*.json
+*.jar
+

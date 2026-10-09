@@ -120,6 +120,12 @@ export function SettingsScreen() {
         if (!data.no_value_reminder_days) {
           data.no_value_reminder_days = '1,10,15,20';
         }
+        if (data.backup_reminder_enabled === undefined) {
+          data.backup_reminder_enabled = 1;
+        }
+        if (data.backup_reminder_day === undefined) {
+          data.backup_reminder_day = 21;
+        }
       }
       setSettings(data);
       if (response.data.auto_cleanup_years) {
@@ -140,7 +146,8 @@ export function SettingsScreen() {
         (settings.debit_notifications_enabled === 1) ||
         (settings.second_debit_reminder_enabled === 1) ||
         ((settings.same_day_reminder_enabled ?? 1) === 1) ||
-        (settings.no_value_reminder_enabled === 1);
+        (settings.no_value_reminder_enabled === 1) ||
+        ((settings.backup_reminder_enabled ?? 1) === 1);
 
       await settingsAPI.update({
         ...settings,
@@ -606,6 +613,46 @@ export function SettingsScreen() {
                         );
                       })}
                     </div>
+                  </div>
+                )}
+              {/* 5º Lembrete Mensal de Backup */}
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-gray-800 dark:text-gray-200 font-medium cursor-pointer flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={(settings.backup_reminder_enabled ?? 1) === 1}
+                      onChange={(e) => setSettings({ ...settings, backup_reminder_enabled: e.target.checked ? 1 : 0 })}
+                      className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
+                    />
+                    <span>💾 Lembrete mensal de cópia de segurança (Backup)</span>
+                  </label>
+                  {(settings.backup_reminder_enabled ?? 1) === 1 ? (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">Ativo</span>
+                  ) : (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Inativo</span>
+                  )}
+                </div>
+
+                <p className="text-xs text-gray-500 dark:text-gray-400 pl-6">
+                  Receba uma notificação no telemóvel para descarregar o backup e manter os seus dados sempre salvaguardados.
+                </p>
+
+                {(settings.backup_reminder_enabled ?? 1) === 1 && (
+                  <div className="flex items-center gap-2 pt-1 pl-6">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Avisar no dia</span>
+                    <Input
+                      type="number"
+                      value={settings.backup_reminder_day ?? 21}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value);
+                        setSettings({ ...settings, backup_reminder_day: isNaN(v) ? 21 : Math.max(1, Math.min(31, v)) });
+                      }}
+                      min="1"
+                      max="31"
+                      className="w-20 h-9"
+                    />
+                    <span className="text-sm text-gray-600 dark:text-gray-400">de cada mês (fecho de ciclo)</span>
                   </div>
                 )}
               </div>

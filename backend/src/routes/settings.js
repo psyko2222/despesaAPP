@@ -74,13 +74,24 @@ router.put('/', authenticateToken, async (req, res) => {
       second_debit_reminder_days,
       same_day_reminder_enabled,
       no_value_reminder_enabled,
-      no_value_reminder_days
+      no_value_reminder_days,
+      backup_reminder_enabled,
+      backup_reminder_day
     } = req.body;
 
     // Build dynamic update query to handle undefined values
     const updates = [];
     const params = [];
     let paramIndex = 1;
+
+    if (backup_reminder_enabled !== undefined) {
+      updates.push(isPostgres ? `backup_reminder_enabled = $${paramIndex++}` : `backup_reminder_enabled = ?`);
+      params.push(backup_reminder_enabled ? 1 : 0);
+    }
+    if (backup_reminder_day !== undefined) {
+      updates.push(isPostgres ? `backup_reminder_day = $${paramIndex++}` : `backup_reminder_day = ?`);
+      params.push(parseInt(backup_reminder_day, 10) || 21);
+    }
 
     if (notifications_enabled !== undefined) {
       updates.push(isPostgres ? `notifications_enabled = $${paramIndex++}` : `notifications_enabled = ?`);

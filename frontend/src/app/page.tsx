@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { Home, Repeat, BarChart3, Settings, Users, Plus, Trash2, Edit, CheckCircle2, Circle, Search, Calendar, AlertTriangle, X, ChevronDown } from 'lucide-react';
+import { Home, Repeat, BarChart3, Settings, Users, Plus, Trash2, Edit, CheckCircle2, Circle, Search, Calendar, AlertTriangle, X, ChevronDown, FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ExpenseForm } from '@/components/ExpenseForm';
@@ -17,6 +17,7 @@ import { BottomNav, Tab } from '@/components/BottomNav';
 import { MonthPickerModal } from '@/components/MonthPickerModal';
 import { InstallGuideModal } from '@/components/InstallGuideModal';
 import { formatMoney, formatDate, currentFinancialPeriodMonth, getNextMonth, getPreviousMonth, getFinancialPeriodDisplay, recurrenceLabel, getPaymentDeadlines, financialPeriod, formatAmount } from '@/lib/utils';
+import { exportMonthlyReportPdf, exportRecurringExpensesPdf } from '@/lib/pdfExport';
 import { expensesAPI, sharesAPI } from '@/lib/api';
 import { Expense, AccountShare } from '@/types';
 
@@ -414,6 +415,28 @@ export default function HomePage() {
               </Button>
             </div>
 
+            {/* Barra de Ações Rápidas: Contagem e Exportação em PDF */}
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                {expenses.length} {expenses.length === 1 ? 'despesa no ciclo' : 'despesas no ciclo'}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => exportMonthlyReportPdf({
+                  periodDisplay: getFinancialPeriodDisplay(currentMonth),
+                  monthKey: currentMonth,
+                  expenses,
+                  userEmail: selectedAccount ? selectedAccount.email : user?.email
+                })}
+                disabled={expenses.length === 0}
+                className="text-xs h-8 flex items-center gap-1.5 border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-950/40"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                <span>Exportar Extrato (PDF)</span>
+              </Button>
+            </div>
+
             {/* Resumo do Mês - Versão Mobile Compacta (sm:hidden) */}
             <div className="sm:hidden mb-4">
               <div className="grid grid-cols-2 gap-2">
@@ -728,9 +751,29 @@ export default function HomePage() {
 
         {activeTab === 'regular' && (
           <div>
-            <h2 className="text-lg sm:text-xl font-semibold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
-              Despesas Regulares - {getFinancialPeriodDisplay(currentMonth)}
-            </h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
+              <div>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">
+                  Despesas Regulares & Recorrentes
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Lista de contratos e despesas periódicas ativas
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => exportRecurringExpensesPdf({
+                  expenses: recurringExpenses,
+                  userEmail: selectedAccount ? selectedAccount.email : user?.email
+                })}
+                disabled={recurringExpenses.length === 0}
+                className="text-xs h-8 flex items-center gap-1.5 self-start sm:self-auto border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-950/40"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                <span>Exportar Recorrentes (PDF)</span>
+              </Button>
+            </div>
             {recurringExpenses.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center text-gray-600 dark:text-gray-400 text-sm sm:text-base">

@@ -47,6 +47,8 @@ export interface Settings {
   same_day_reminder_enabled?: number;
   no_value_reminder_enabled?: number;
   no_value_reminder_days?: string;
+  backup_reminder_enabled?: number;
+  backup_reminder_day?: number;
 }
 
 export interface AuthResponse {

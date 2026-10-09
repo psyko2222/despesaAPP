@@ -54,7 +54,9 @@ async function processDebitReminders(options = {}) {
            COALESCE(s.second_debit_reminder_days, 0) as second_debit_reminder_days,
            COALESCE(s.same_day_reminder_enabled, 1) as same_day_reminder_enabled,
            COALESCE(s.no_value_reminder_enabled, 0) as no_value_reminder_enabled,
-           COALESCE(s.no_value_reminder_days, '1,10,15,20') as no_value_reminder_days
+           COALESCE(s.no_value_reminder_days, '1,10,15,20') as no_value_reminder_days,
+           COALESCE(s.backup_reminder_enabled, 1) as backup_reminder_enabled,
+           COALESCE(s.backup_reminder_day, 21) as backup_reminder_day
     FROM users u
     JOIN settings s ON u.id = s.user_id
     WHERE u.status = 'approved' AND (
@@ -62,6 +64,7 @@ async function processDebitReminders(options = {}) {
       s.second_debit_reminder_enabled = 1 OR 
       s.same_day_reminder_enabled = 1 OR 
       s.no_value_reminder_enabled = 1 OR 
+      s.backup_reminder_enabled = 1 OR 
       s.notifications_enabled = 1
     )
   `;
@@ -234,6 +237,34 @@ async function processDebitReminders(options = {}) {
             pushSent
           });
         }
+      }
+    }
+
+    // Verificação de Lembrete Mensal de Backup
+    if (user.backup_reminder_enabled === 1) {
+      const lisbonParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Lisbon',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(new Date());
+
+      const realDay = parseInt(lisbonParts.find(p => p.type === 'day').value, 10);
+      const currentDay = options.forceDay !== undefined ? options.forceDay : realDay;
+      const targetBackupDay = parseInt(user.backup_reminder_day, 10) || 21;
+
+      if (currentDay === targetBackupDay) {
+        const notificationTitle = '💾 Lembrete: Cópia de Segurança Mensal';
+        const notificationBody = 'O ciclo do mês fechou. Clique para descarregar o backup dos seus dados.';
+        const pushSent = await sendPush(notificationTitle, notificationBody, 'monthly-backup-reminder');
+
+        results.push({
+          userId: user.id,
+          email: user.email,
+          type: 'backup_reminder',
+          currentDay,
+          pushSent
+        });
       }
     }
   }
