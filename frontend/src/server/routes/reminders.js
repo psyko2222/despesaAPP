@@ -241,7 +241,8 @@ async function processDebitReminders(options = {}) {
     }
 
     // Verificação de Lembrete Mensal de Backup
-    if (user.backup_reminder_enabled === 1) {
+    const backupEnabled = parseInt(user.backup_reminder_enabled, 10) === 1 || user.backup_reminder_enabled == 1;
+    if (backupEnabled) {
       const lisbonParts = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Europe/Lisbon',
         year: 'numeric',
@@ -250,7 +251,7 @@ async function processDebitReminders(options = {}) {
       }).formatToParts(new Date());
 
       const realDay = parseInt(lisbonParts.find(p => p.type === 'day').value, 10);
-      const currentDay = options.forceDay !== undefined ? options.forceDay : realDay;
+      const currentDay = options.forceDay !== undefined ? parseInt(options.forceDay, 10) : realDay;
       const targetBackupDay = parseInt(user.backup_reminder_day, 10) || 21;
 
       if (currentDay === targetBackupDay) {
