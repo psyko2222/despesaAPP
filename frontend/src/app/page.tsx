@@ -3,11 +3,12 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { Home, Repeat, BarChart3, Settings, Users, Plus, Trash2, Edit, CheckCircle2, Circle, Search, Calendar, AlertTriangle, X, ChevronDown, FileDown, Bell } from 'lucide-react';
+import { Home, Repeat, BarChart3, Settings, Users, Plus, Trash2, Edit, CheckCircle2, Circle, Search, Calendar, AlertTriangle, X, ChevronDown, FileDown, Bell, PiggyBank } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ExpenseForm } from '@/components/ExpenseForm';
 import { StatisticsScreen } from '@/components/StatisticsScreen';
+import { SavingsScreen } from '@/components/SavingsScreen';
 import { SettingsScreen } from '@/components/SettingsScreen';
 import { SharesScreen } from '@/components/SharesScreen';
 import { AdminPanel } from '@/components/AdminPanel';
@@ -353,7 +354,7 @@ export default function HomePage() {
     { id: 'month' as Tab, label: 'Mês', icon: Home },
     { id: 'regular' as Tab, label: 'Regulares', icon: Repeat },
     { id: 'stats' as Tab, label: 'Estatísticas', icon: BarChart3 },
-    { id: 'shares' as Tab, label: 'Partilhas', icon: Users },
+    { id: 'savings' as Tab, label: 'Poupanças', icon: PiggyBank },
     { id: 'settings' as Tab, label: 'Definições', icon: Settings },
     ...(user?.role === 'admin' ? [{ id: 'admin' as Tab, label: 'Admin', icon: Settings }] : []),
   ];
@@ -429,7 +430,7 @@ export default function HomePage() {
                 >
                   <Icon className="w-4 h-4" />
                   <span>{tab.label}</span>
-                  {tab.id === 'shares' && pendingInvitations > 0 && (
+                  {(tab.id === 'settings' || tab.id === 'shares') && pendingInvitations > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
                       {pendingInvitations}
                     </span>
@@ -906,6 +907,10 @@ export default function HomePage() {
 
         {activeTab === 'stats' && (
           <StatisticsScreen userId={selectedAccount?.id} />
+        )}
+
+        {activeTab === 'savings' && (
+          <SavingsScreen />
         )}
 
         {activeTab === 'shares' && (

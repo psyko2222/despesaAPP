@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input';
 import { settingsAPI, backupAPI, authAPI, adminAPI } from '@/lib/api';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useToast } from '@/components/ui/toast';
-import { Bell, BellOff, CheckCircle2, AlertCircle, Send, Loader2, Sun, Moon, Monitor, Sliders, Database, Lock, Trash2, Download, Laptop, BookOpen } from 'lucide-react';
+import { Bell, BellOff, CheckCircle2, AlertCircle, Send, Loader2, Sun, Moon, Monitor, Sliders, Database, Lock, Trash2, Download, Laptop, BookOpen, Users } from 'lucide-react';
 import { InstallGuideModal } from '@/components/InstallGuideModal';
+import { SharesScreen } from '@/components/SharesScreen';
 import { Settings } from '@/types';
 
 const SETTINGS_TABS = [
@@ -17,6 +18,7 @@ const SETTINGS_TABS = [
   { id: 2, label: 'Dados', icon: Database, desc: 'Backup e restauro' },
   { id: 3, label: 'Segurança', icon: Lock, desc: 'Alterar password' },
   { id: 4, label: 'Limpeza', icon: Trash2, desc: 'Registos antigos' },
+  { id: 5, label: 'Partilhas', icon: Users, desc: 'Contas partilhadas' },
 ];
 
 export function SettingsScreen() {
@@ -1069,19 +1071,25 @@ export function SettingsScreen() {
         </Card>
       )}
 
+      {activeTab === 5 && (
+        <SharesScreen />
+      )}
+
       {/* Save Button */}
-      <div className="mt-6">
-        <Button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full"
-        >
-          {saving ? 'A guardar...' : 'Guardar Definições'}
-        </Button>
-        <p className="mt-4 text-center text-xs text-gray-400 select-none">
-          Publicação: {process.env.NEXT_PUBLIC_BUILD_TIME || 'Desenvolvimento'}
-        </p>
-      </div>
+      {activeTab !== 5 && (
+        <div className="mt-6">
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full"
+          >
+            {saving ? 'A guardar...' : 'Guardar Definições'}
+          </Button>
+          <p className="mt-4 text-center text-xs text-gray-400 select-none">
+            Publicação: {process.env.NEXT_PUBLIC_BUILD_TIME || 'Desenvolvimento'}
+          </p>
+        </div>
+      )}
 
       {/* Modal com Instruções de Instalação */}
       <InstallGuideModal

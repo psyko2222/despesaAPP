@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { Home, Repeat, BarChart3, Users, Settings, Shield } from 'lucide-react';
+import { Home, Repeat, BarChart3, Users, Settings, Shield, PiggyBank } from 'lucide-react';
 
-export type Tab = 'month' | 'regular' | 'stats' | 'shares' | 'settings' | 'admin';
+export type Tab = 'month' | 'regular' | 'stats' | 'savings' | 'shares' | 'settings' | 'admin';
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -22,8 +22,8 @@ export function BottomNav({
     { id: 'month' as Tab, label: 'Mês', icon: Home },
     { id: 'regular' as Tab, label: 'Regulares', icon: Repeat },
     { id: 'stats' as Tab, label: 'Estatísticas', icon: BarChart3 },
-    { id: 'shares' as Tab, label: 'Partilhas', icon: Users, badge: pendingInvitations },
-    { id: 'settings' as Tab, label: 'Definições', icon: Settings },
+    { id: 'savings' as Tab, label: 'Poupanças', icon: PiggyBank },
+    { id: 'settings' as Tab, label: 'Definições', icon: Settings, badge: pendingInvitations },
     ...(isAdmin ? [{ id: 'admin' as Tab, label: 'Admin', icon: Shield }] : [])
   ];
 

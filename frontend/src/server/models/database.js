@@ -1,4 +1,4 @@
-﻿const { Pool } = require('pg');
+const { Pool } = require('pg');
 
 let pool = null;
 
@@ -162,6 +162,31 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_error_logs_level ON error_logs(level);
       CREATE INDEX IF NOT EXISTS idx_error_logs_user ON error_logs(user_id);
       CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at);
+
+      CREATE TABLE IF NOT EXISTS savings (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        target_amount_cents INTEGER DEFAULT NULL,
+        current_amount_cents INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS saving_transactions (
+        id SERIAL PRIMARY KEY,
+        saving_id INTEGER NOT NULL REFERENCES savings(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        amount_cents INTEGER NOT NULL,
+        type VARCHAR(20) NOT NULL,
+        description VARCHAR(255),
+        date VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_savings_user ON savings(user_id);
+      CREATE INDEX IF NOT EXISTS idx_saving_trans_saving ON saving_transactions(saving_id);
+      CREATE INDEX IF NOT EXISTS idx_saving_trans_user ON saving_transactions(user_id);
 
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS second_debit_reminder_enabled INTEGER DEFAULT 0;
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS second_debit_reminder_days INTEGER DEFAULT 0;

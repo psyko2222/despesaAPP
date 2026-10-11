@@ -116,3 +116,25 @@ export interface StatisticsSummaryResponse {
   windowTotals: number[];
 }
 
+export interface Saving {
+  id: number;
+  user_id: number;
+  name: string;
+  target_amount_cents: number | null;
+  current_amount_cents: number;
+  transactions_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavingTransaction {
+  id: number;
+  saving_id: number;
+  user_id: number;
+  amount_cents: number;
+  type: 'deposit' | 'withdraw';
+  description?: string;
+  date: string;
+  created_at: string;
+}
+

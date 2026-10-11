@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 
 const app = express();
@@ -28,6 +28,7 @@ app.use('/api/push', require('./routes/push'));
 app.use('/api/reminders', require('./routes/reminders'));
 app.use('/api/google', require('./routes/google'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/savings', require('./routes/savings'));
 
 // Health check
 app.get(['/health', '/api/health'], (req, res) => {

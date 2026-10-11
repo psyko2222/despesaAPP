@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Expense, Settings, AccountShare, SharesResponse, StatisticsSummaryResponse } from '@/types';
+import { AuthResponse, User, Expense, Settings, AccountShare, SharesResponse, StatisticsSummaryResponse, Saving, SavingTransaction } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -194,6 +194,29 @@ export const adminAPI = {
 
   cleanupExpenses: (years: number) =>
     api.delete<any>(`/admin/expenses/cleanup?years=${years}`),
+};
+
+export const savingsAPI = {
+  getAll: () =>
+    api.get<Saving[]>('/savings'),
+
+  create: (data: { name: string; target_amount_cents?: number | null; initial_amount_cents?: number }) =>
+    api.post<Saving>('/savings', data),
+
+  update: (id: number, data: { name: string; target_amount_cents?: number | null }) =>
+    api.put<Saving>(`/savings/${id}`, data),
+
+  delete: (id: number) =>
+    api.delete<{ success: boolean; message: string }>(`/savings/${id}`),
+
+  getTransactions: (id: number) =>
+    api.get<SavingTransaction[]>(`/savings/${id}/transactions`),
+
+  addTransaction: (id: number, data: { amount_cents: number; type: 'deposit' | 'withdraw'; description?: string; date?: string }) =>
+    api.post<{ success: boolean; saving: Saving; transaction: SavingTransaction }>(`/savings/${id}/transactions`, data),
+
+  deleteTransaction: (txId: number) =>
+    api.delete<{ success: boolean; message: string }>(`/savings/transactions/${txId}`),
 };
 
 export default api;
