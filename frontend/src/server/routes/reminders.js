@@ -148,32 +148,43 @@ async function processDebitReminders(options = {}) {
 
       if (expenses.length === 1) {
         const exp = expenses[0];
-        const valStr = exp.amount_cents > 0 ? ` (${(exp.amount_cents / 100).toFixed(2)}€)` : '';
+        const valStr = exp.amount_cents > 0 ? ` (${(exp.amount_cents / 100).toFixed(2).replace('.', ',')} €)` : '';
         if (daysBefore === 0) {
-          notificationTitle = '⚠️ Atenção: Débito Hoje por Pagar';
+          notificationTitle = '⚠️ Débito Hoje';
           notificationBody = `A despesa "${exp.description}"${valStr} debita hoje e ainda não foi paga!`;
         } else if (daysBefore === 1) {
-          notificationTitle = '⚠️ Atenção: Débito Agendado para Amanhã';
-          notificationBody = `A despesa "${exp.description}"${valStr} irá ser debitada amanhã (dia ${formattedDate}).`;
+          notificationTitle = '📅 Débito Amanhã';
+          notificationBody = `A despesa "${exp.description}"${valStr} será debitada amanhã (${formattedDate}).`;
         } else {
-          notificationTitle = `⚠️ Atenção: Débito em ${daysBefore} dias`;
-          notificationBody = `A despesa "${exp.description}"${valStr} irá ser debitada no dia ${formattedDate}.`;
+          notificationTitle = `📅 Débito em ${daysBefore} dias`;
+          notificationBody = `A despesa "${exp.description}"${valStr} será debitada no dia ${formattedDate}.`;
         }
       } else {
         const names = expenses.map(e => e.description).slice(0, 3).join(', ') + (expenses.length > 3 ? '...' : '');
+        const totalFormatted = (totalCents / 100).toFixed(2).replace('.', ',') + ' €';
         if (daysBefore === 0) {
-          notificationTitle = `⚠️ Atenção: ${expenses.length} Despesas Hoje por Pagar`;
-          notificationBody = `As despesas (${names}) num total de ${totalEur}€ debitam hoje e ainda não foram pagas!`;
+          notificationTitle = `⚠️ ${expenses.length} Despesas Hoje`;
+          notificationBody = `As despesas (${names}) num total de ${totalFormatted} debitam hoje e ainda não foram pagas!`;
         } else if (daysBefore === 1) {
-          notificationTitle = `⚠️ Atenção: ${expenses.length} Despesas a Debitar Amanhã`;
-          notificationBody = `As despesas (${names}) num total de ${totalEur}€ irão ser debitadas amanhã (dia ${formattedDate}).`;
+          notificationTitle = `📅 ${expenses.length} Despesas Amanhã`;
+          notificationBody = `As despesas (${names}) num total de ${totalFormatted} serão debitadas amanhã (${formattedDate}).`;
         } else {
-          notificationTitle = `⚠️ Atenção: ${expenses.length} Despesas em ${daysBefore} dias`;
-          notificationBody = `As despesas (${names}) num total de ${totalEur}€ irão ser debitadas no dia ${formattedDate}.`;
+          notificationTitle = `📅 ${expenses.length} Despesas em ${daysBefore} dias`;
+          notificationBody = `As despesas (${names}) num total de ${totalFormatted} serão debitadas no dia ${formattedDate}.`;
         }
       }
 
       const pushSent = await sendPush(notificationTitle, notificationBody, `debit-${daysBefore}`);
+
+      // Registar também na central interna de notificações (sino)
+      try {
+        const notifSql = isPostgres
+          ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
+          : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
+        await query(notifSql, [user.id, notificationTitle, notificationBody, 'reminder']);
+      } catch (errNotif) {
+        console.error('Erro ao registar notificação interna:', errNotif);
+      }
 
       results.push({
         userId: user.id,
@@ -219,17 +230,27 @@ async function processDebitReminders(options = {}) {
 
         if (noValExpenses && noValExpenses.length > 0) {
           const count = noValExpenses.length;
-          const notificationTitle = '⚠️ Atenção: Despesas Sem Valor';
+          const notificationTitle = '⚠️ Despesas Sem Valor';
           let notificationBody = '';
 
           if (count === 1) {
-            notificationBody = `Por favor verifique despesas sem valor: "${noValExpenses[0].description}" ainda não tem valor definido.`;
+            notificationBody = `A despesa "${noValExpenses[0].description}" ainda não tem valor definido no ciclo atual.`;
           } else {
             const names = noValExpenses.map(e => e.description).slice(0, 3).join(', ') + (count > 3 ? '...' : '');
-            notificationBody = `Por favor verifique despesas sem valor: existem ${count} despesas (${names}) por preencher.`;
+            notificationBody = `Existem ${count} despesas (${names}) sem valor definido no ciclo atual.`;
           }
 
           const pushSent = await sendPush(notificationTitle, notificationBody, 'no-value-reminder');
+
+          // Registar na central interna de notificações
+          try {
+            const notifSql = isPostgres
+              ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
+              : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
+            await query(notifSql, [user.id, notificationTitle, notificationBody, 'warning']);
+          } catch (errNotif) {
+            console.error('Erro ao registar notificação interna:', errNotif);
+          }
 
           results.push({
             userId: user.id,
@@ -258,9 +279,19 @@ async function processDebitReminders(options = {}) {
       const targetBackupDay = parseInt(user.backup_reminder_day, 10) || 21;
 
       if (currentDay === targetBackupDay) {
-        const notificationTitle = '💾 Lembrete: Cópia de Segurança Mensal';
+        const notificationTitle = '💾 Cópia de Segurança Mensal';
         const notificationBody = 'O ciclo do mês fechou. Clique para descarregar o backup dos seus dados.';
         const pushSent = await sendPush(notificationTitle, notificationBody, 'monthly-backup-reminder');
+
+        // Registar na central interna de notificações
+        try {
+          const notifSql = isPostgres
+            ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
+            : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
+          await query(notifSql, [user.id, notificationTitle, notificationBody, 'backup']);
+        } catch (errNotif) {
+          console.error('Erro ao registar notificação interna:', errNotif);
+        }
 
         results.push({
           userId: user.id,
