@@ -105,10 +105,6 @@ export default function HomePage() {
 
   const handleOpenNotifications = () => {
     setIsNotificationsOpen(true);
-    // Ao clicar em cima do sino, passam imediatamente a lidas
-    if (unreadCount > 0) {
-      markNotificationsAsRead();
-    }
   };
 
   const unreadCount = useMemo(() => {
@@ -1095,6 +1091,7 @@ export default function HomePage() {
         onClose={() => setIsNotificationsOpen(false)}
         notifications={notifications}
         onMarkAsRead={markNotificationsAsRead}
+        onNavigate={(tab) => setActiveTab(tab)}
       />
     </div>
   );
