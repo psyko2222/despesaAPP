@@ -133,8 +133,8 @@ export const backupAPI = {
 };
 
 export const sharesAPI = {
-  invite: (email: string) =>
-    api.post('/shares/invite', { email }),
+  invite: (email: string, permissions?: { can_read?: boolean; can_write?: boolean; can_delete?: boolean }) =>
+    api.post('/shares/invite', { email, ...permissions }),
   
   getInvitations: () =>
     api.get<AccountShare[]>('/shares/invitations'),

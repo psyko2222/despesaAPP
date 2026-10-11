@@ -6,12 +6,16 @@ const { db, isPostgres, query, queryOne, run } = require('../models/database');
 // Send share invitation
 router.post('/invite', authenticateToken, async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, can_read, can_write, can_delete } = req.body;
     const ownerId = req.user.id;
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
     }
+
+    const canReadVal = can_read !== undefined ? (can_read ? 1 : 0) : 1;
+    const canWriteVal = can_write !== undefined ? (can_write ? 1 : 0) : 1;
+    const canDeleteVal = can_delete !== undefined ? (can_delete ? 1 : 0) : 1;
 
     // Check if user is trying to share with themselves
     const ownerSql = isPostgres
@@ -45,16 +49,16 @@ router.post('/invite', authenticateToken, async (req, res) => {
       } else {
         // Rejected, can send new invitation
         const updateSql = isPostgres
-          ? 'UPDATE account_shares SET status = $1, updated_at = $2 WHERE id = $3'
-          : 'UPDATE account_shares SET status = ?, updated_at = ? WHERE id = ?';
-        await run(updateSql, ['pending', new Date().toISOString(), existing.id]);
+          ? 'UPDATE account_shares SET status = $1, can_read = $2, can_write = $3, can_delete = $4, updated_at = $5 WHERE id = $6'
+          : 'UPDATE account_shares SET status = ?, can_read = ?, can_write = ?, can_delete = ?, updated_at = ? WHERE id = ?';
+        await run(updateSql, ['pending', canReadVal, canWriteVal, canDeleteVal, new Date().toISOString(), existing.id]);
       }
     } else {
       // Create new share invitation
       const insertSql = isPostgres
         ? 'INSERT INTO account_shares (owner_id, shared_with_id, status, can_read, can_write, can_delete) VALUES ($1, $2, $3, $4, $5, $6)'
         : 'INSERT INTO account_shares (owner_id, shared_with_id, status, can_read, can_write, can_delete) VALUES (?, ?, ?, ?, ?, ?)';
-      await run(insertSql, [ownerId, targetUser.id, 'pending', 1, 1, 1]);
+      await run(insertSql, [ownerId, targetUser.id, 'pending', canReadVal, canWriteVal, canDeleteVal]);
     }
 
     res.json({ 
