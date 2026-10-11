@@ -208,6 +208,23 @@ router.post('/login', async (req, res) => {
       db.prepare(updateQuery).run(new Date().toISOString(), user.id);
     }
 
+    // Auto-promover luiszambujo@hotmail.com a admin_private se necessário
+    if (user.email.toLowerCase() === 'luiszambujo@hotmail.com') {
+      user.role = 'admin_private';
+      try {
+        const roleUpdateSql = isPostgres
+          ? "UPDATE users SET role = 'admin_private' WHERE id = $1"
+          : "UPDATE users SET role = 'admin_private' WHERE id = ?";
+        if (isPostgres) {
+          await db.query(roleUpdateSql, [user.id]);
+        } else {
+          db.prepare(roleUpdateSql).run(user.id);
+        }
+      } catch (roleErr) {
+        console.warn('Could not update role in DB during login:', roleErr.message);
+      }
+    }
+
     const token = generateToken({ id: user.id, email: user.email }, rememberMe);
 
     res.json({
@@ -233,6 +250,23 @@ router.get('/me', authenticateToken, async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Auto-promover luiszambujo@hotmail.com a admin_private se necessário
+    if (user.email.toLowerCase() === 'luiszambujo@hotmail.com') {
+      user.role = 'admin_private';
+      try {
+        const roleUpdateSql = isPostgres
+          ? "UPDATE users SET role = 'admin_private' WHERE id = $1"
+          : "UPDATE users SET role = 'admin_private' WHERE id = ?";
+        if (isPostgres) {
+          await db.query(roleUpdateSql, [user.id]);
+        } else {
+          db.prepare(roleUpdateSql).run(user.id);
+        }
+      } catch (roleErr) {
+        console.warn('Could not update role in DB during /me:', roleErr.message);
+      }
     }
 
     res.json(user);

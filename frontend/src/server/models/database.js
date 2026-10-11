@@ -17,11 +17,22 @@ function getDb() {
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000
     });
+    ensureInitialized();
   }
   return pool;
 }
 
 const isPostgres = true;
+
+let initPromise = null;
+function ensureInitialized() {
+  if (!initPromise) {
+    initPromise = initializeDatabase().catch(err => {
+      console.error('Database migration error:', err);
+    });
+  }
+  return initPromise;
+}
 
 async function initializeDatabase() {
   const db = getDb();
@@ -208,18 +219,68 @@ async function initializeDatabase() {
       ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_days_before INTEGER DEFAULT 7;
       ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_target_reached_enabled INTEGER DEFAULT 1;
       ALTER TABLE savings ADD COLUMN IF NOT EXISTS target_reached_notified INTEGER DEFAULT 0;
-
-      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-      ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('user', 'admin', 'admin_private'));
-      ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_private INTEGER DEFAULT 0;
-      ALTER TABLE savings ADD COLUMN IF NOT EXISTS is_private INTEGER DEFAULT 0;
-      UPDATE users SET role = 'admin_private' WHERE LOWER(email) = 'luiszambujo@hotmail.com';
     `);
 
     await client.query('COMMIT');
+
+    // Executar migrações individuais de forma segura (garantir colunas)
+    const individualMigrations = [
+      'ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_private INTEGER DEFAULT 0;',
+      'ALTER TABLE savings ADD COLUMN IF NOT EXISTS is_private INTEGER DEFAULT 0;',
+      'ALTER TABLE savings ADD COLUMN IF NOT EXISTS target_date VARCHAR(50) DEFAULT NULL;',
+      'ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_date_enabled INTEGER DEFAULT 0;',
+      'ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_days_before INTEGER DEFAULT 7;',
+      'ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_target_reached_enabled INTEGER DEFAULT 1;',
+      'ALTER TABLE savings ADD COLUMN IF NOT EXISTS target_reached_notified INTEGER DEFAULT 0;',
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS second_debit_reminder_enabled INTEGER DEFAULT 0;',
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS second_debit_reminder_days INTEGER DEFAULT 0;',
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS same_day_reminder_enabled INTEGER DEFAULT 1;',
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS no_value_reminder_enabled INTEGER DEFAULT 0;',
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS no_value_reminder_days VARCHAR(50) DEFAULT \'1,10,15,20\';',
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS backup_reminder_enabled INTEGER DEFAULT 1;',
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS backup_reminder_day INTEGER DEFAULT 21;'
+    ];
+
+    for (const sql of individualMigrations) {
+      try {
+        await client.query(sql);
+      } catch (colErr) {
+        console.warn('Migration column warning:', colErr.message);
+      }
+    }
+
+    // Atualizar check constraints na tabela users para role
+    try {
+      const constraintsQuery = `
+        SELECT conname 
+        FROM pg_constraint 
+        WHERE conrelid = 'users'::regclass 
+          AND contype = 'c' 
+          AND pg_get_constraintdef(oid) LIKE '%role%';
+      `;
+      const constrRes = await client.query(constraintsQuery);
+      for (const row of constrRes.rows) {
+        try {
+          await client.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS "${row.conname}";`);
+        } catch (e) {
+          console.warn('Drop constraint warning:', e.message);
+        }
+      }
+      await client.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('user', 'admin', 'admin_private'));`);
+    } catch (conErr) {
+      console.warn('Check constraint update warning:', conErr.message);
+    }
+
+    // Promover luiszambujo@hotmail.com
+    try {
+      await client.query(`UPDATE users SET role = 'admin_private' WHERE LOWER(email) = 'luiszambujo@hotmail.com';`);
+    } catch (uErr) {
+      console.warn('User role update warning:', uErr.message);
+    }
+
     console.log('PostgreSQL Database initialized successfully');
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error initializing PostgreSQL database:', error);
   } finally {
     client.release();
@@ -267,15 +328,18 @@ function normalizedRecurrenceMonths(months) {
 }
 
 // Database helper functions for PostgreSQL
-function query(sql, params = []) {
+async function query(sql, params = []) {
+  await ensureInitialized();
   return getDb().query(sql, params);
 }
 
-function queryOne(sql, params = []) {
+async function queryOne(sql, params = []) {
+  await ensureInitialized();
   return getDb().query(sql, params).then(result => result.rows[0]);
 }
 
-function run(sql, params = []) {
+async function run(sql, params = []) {
+  await ensureInitialized();
   return getDb().query(sql, params).then(result => ({
     lastInsertRowid: result.rows[0]?.id,
     changes: result.rowCount
@@ -283,6 +347,7 @@ function run(sql, params = []) {
 }
 
 async function transaction(callback) {
+  await ensureInitialized();
   const client = await getDb().connect();
   try {
     await client.query('BEGIN');
@@ -301,6 +366,7 @@ module.exports = {
   get db() { return getDb(); },
   isPostgres: true,
   initializeDatabase,
+  ensureInitialized,
   financialPeriod,
   getPreviousMonth,
   currentFinancialPeriodMonth,

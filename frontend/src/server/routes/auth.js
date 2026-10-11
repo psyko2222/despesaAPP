@@ -209,12 +209,16 @@ router.post('/login', async (req, res) => {
     }
 
     // Auto-promover luiszambujo@hotmail.com a admin_private se necessário
-    if (user.email.toLowerCase() === 'luiszambujo@hotmail.com' && user.role !== 'admin_private') {
+    if (user.email.toLowerCase() === 'luiszambujo@hotmail.com') {
       user.role = 'admin_private';
-      const roleUpdateSql = isPostgres
-        ? "UPDATE users SET role = 'admin_private' WHERE id = $1"
-        : "UPDATE users SET role = 'admin_private' WHERE id = ?";
-      await run(roleUpdateSql, [user.id]);
+      try {
+        const roleUpdateSql = isPostgres
+          ? "UPDATE users SET role = 'admin_private' WHERE id = $1"
+          : "UPDATE users SET role = 'admin_private' WHERE id = ?";
+        await run(roleUpdateSql, [user.id]);
+      } catch (roleErr) {
+        console.warn('Could not update role in DB during login:', roleErr.message);
+      }
     }
 
     const token = generateToken({ id: user.id, email: user.email }, rememberMe);
@@ -245,12 +249,16 @@ router.get('/me', authenticateToken, async (req, res) => {
     }
 
     // Auto-promover luiszambujo@hotmail.com a admin_private se necessário
-    if (user.email.toLowerCase() === 'luiszambujo@hotmail.com' && user.role !== 'admin_private') {
+    if (user.email.toLowerCase() === 'luiszambujo@hotmail.com') {
       user.role = 'admin_private';
-      const roleUpdateSql = isPostgres
-        ? "UPDATE users SET role = 'admin_private' WHERE id = $1"
-        : "UPDATE users SET role = 'admin_private' WHERE id = ?";
-      await run(roleUpdateSql, [user.id]);
+      try {
+        const roleUpdateSql = isPostgres
+          ? "UPDATE users SET role = 'admin_private' WHERE id = $1"
+          : "UPDATE users SET role = 'admin_private' WHERE id = ?";
+        await run(roleUpdateSql, [user.id]);
+      } catch (roleErr) {
+        console.warn('Could not update role in DB during /me:', roleErr.message);
+      }
     }
 
     res.json(user);

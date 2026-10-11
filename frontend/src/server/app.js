@@ -1,5 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const { ensureInitialized } = require('./models/database');
+
+// Trigger background database initialization on server start
+ensureInitialized().catch(err => console.error('Initial DB sync error:', err));
 
 const app = express();
 

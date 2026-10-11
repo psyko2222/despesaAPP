@@ -32,7 +32,7 @@ async function initializeDatabase() {
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
-        role TEXT DEFAULT 'user' CHECK(role IN ('user', 'admin')),
+        role TEXT DEFAULT 'user' CHECK(role IN ('user', 'admin', 'admin_private')),
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         last_login TEXT
       );
@@ -191,7 +191,7 @@ async function initializeDatabase() {
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         status VARCHAR(50) DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
-        role VARCHAR(50) DEFAULT 'user' CHECK(role IN ('user', 'admin')),
+        role VARCHAR(50) DEFAULT 'user' CHECK(role IN ('user', 'admin', 'admin_private')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_login TIMESTAMP
       );
@@ -209,6 +209,7 @@ async function initializeDatabase() {
         original_day INTEGER NOT NULL,
         active_series INTEGER NOT NULL DEFAULT 1,
         recurrence_months INTEGER NOT NULL DEFAULT 1,
+        is_private INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
