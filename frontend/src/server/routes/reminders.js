@@ -303,6 +303,108 @@ async function processDebitReminders(options = {}) {
       }
     }
 
+    // Verificação de Lembretes de Aproximação da Data Limite de Poupanças
+    try {
+      const savingsSql = isPostgres
+        ? `SELECT * FROM savings 
+           WHERE user_id = $1 
+             AND target_date IS NOT NULL 
+             AND reminder_date_enabled = 1`
+        : `SELECT * FROM savings 
+           WHERE user_id = ? 
+             AND target_date IS NOT NULL 
+             AND reminder_date_enabled = 1`;
+      const savingsResult = await query(savingsSql, [user.id]);
+      const userSavings = isPostgres ? (savingsResult.rows || savingsResult) : savingsResult;
+
+      if (userSavings && userSavings.length > 0) {
+        const lisbonParts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Europe/Lisbon',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).formatToParts(new Date());
+        const todayStr = `${lisbonParts.find(p => p.type === 'year').value}-${lisbonParts.find(p => p.type === 'month').value}-${lisbonParts.find(p => p.type === 'day').value}`;
+        const todayDate = new Date(todayStr + 'T00:00:00Z');
+
+        for (const saving of userSavings) {
+          if (!saving.target_date) continue;
+
+          const targetDate = new Date(saving.target_date + 'T00:00:00Z');
+          const diffMs = targetDate.getTime() - todayDate.getTime();
+          const daysRemaining = Math.round(diffMs / (1000 * 60 * 60 * 24));
+          const reminderDaysBefore = parseInt(saving.reminder_days_before, 10) || 7;
+
+          // Notificar se faltam os dias configurados OU se faltam 0 dias (hoje) OU se falta 1 dia
+          const shouldNotify = (daysRemaining === reminderDaysBefore) || (daysRemaining === 0) || (daysRemaining === 1 && reminderDaysBefore > 1);
+
+          if (shouldNotify) {
+            // Verificar se já foi enviada notificação hoje para esta poupança para evitar duplicados
+            const checkNotifSql = isPostgres
+              ? `SELECT id FROM notifications 
+                 WHERE user_id = $1 
+                   AND type = 'saving_deadline' 
+                   AND message LIKE $2 
+                   AND created_at >= CURRENT_DATE`
+              : `SELECT id FROM notifications 
+                 WHERE user_id = ? 
+                   AND type = 'saving_deadline' 
+                   AND message LIKE ? 
+                   AND date(created_at) = date('now')`;
+            const checkRes = await query(checkNotifSql, [user.id, `%${saving.name}%`]);
+            const existingNotifs = isPostgres ? (checkRes.rows || checkRes) : checkRes;
+
+            if (!existingNotifs || existingNotifs.length === 0) {
+              const [tYear, tMonth, tDay] = saving.target_date.split('-');
+              const formattedDate = `${tDay}/${tMonth}/${tYear}`;
+              const valCurStr = (saving.current_amount_cents / 100).toFixed(2).replace('.', ',') + ' €';
+              const valTargetStr = saving.target_amount_cents 
+                ? ` (Meta: ${(saving.target_amount_cents / 100).toFixed(2).replace('.', ',')} €)` 
+                : '';
+
+              let notifTitle = '';
+              let notifBody = '';
+
+              if (daysRemaining === 0) {
+                notifTitle = `🎯 Prazo Hoje: Poupança "${saving.name}"`;
+                notifBody = `O prazo da poupança "${saving.name}" termina hoje! Saldo acumulado: ${valCurStr}${valTargetStr}.`;
+              } else if (daysRemaining === 1) {
+                notifTitle = `🎯 Prazo Amanhã: Poupança "${saving.name}"`;
+                notifBody = `Falta 1 dia para o prazo da poupança "${saving.name}" (${formattedDate}). Saldo atual: ${valCurStr}${valTargetStr}.`;
+              } else {
+                notifTitle = `🎯 Prazo em ${daysRemaining} dias: Poupança "${saving.name}"`;
+                notifBody = `Faltam ${daysRemaining} dias para a data limite da poupança "${saving.name}" (${formattedDate}). Saldo atual: ${valCurStr}${valTargetStr}.`;
+              }
+
+              const pushSent = await sendPush(notifTitle, notifBody, `saving-deadline-${saving.id}-${todayStr}`);
+
+              // Registar na central interna de notificações
+              try {
+                const notifInsertSql = isPostgres
+                  ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
+                  : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
+                await query(notifInsertSql, [user.id, notifTitle, notifBody, 'saving_deadline']);
+              } catch (errNotif) {
+                console.error('Erro ao registar notificação interna de prazo de poupança:', errNotif);
+              }
+
+              results.push({
+                userId: user.id,
+                email: user.email,
+                type: 'saving_deadline_reminder',
+                savingId: saving.id,
+                savingName: saving.name,
+                daysRemaining,
+                pushSent
+              });
+            }
+          }
+        }
+      }
+    } catch (savingErr) {
+      console.error('Erro ao verificar prazos de poupanças:', savingErr);
+    }
+
     // Backup Automático para o Google Drive
     const driveBackupEnabled = parseInt(user.drive_backup_enabled, 10) === 1 || user.drive_backup_enabled == 1;
     if (driveBackupEnabled && user.google_refresh_token) {

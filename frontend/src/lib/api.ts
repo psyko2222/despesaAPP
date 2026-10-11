@@ -200,10 +200,25 @@ export const savingsAPI = {
   getAll: () =>
     api.get<Saving[]>('/savings'),
 
-  create: (data: { name: string; target_amount_cents?: number | null; initial_amount_cents?: number }) =>
+  create: (data: { 
+    name: string; 
+    target_amount_cents?: number | null; 
+    initial_amount_cents?: number;
+    target_date?: string | null;
+    reminder_date_enabled?: number;
+    reminder_days_before?: number;
+    reminder_target_reached_enabled?: number;
+  }) =>
     api.post<Saving>('/savings', data),
 
-  update: (id: number, data: { name: string; target_amount_cents?: number | null }) =>
+  update: (id: number, data: { 
+    name: string; 
+    target_amount_cents?: number | null;
+    target_date?: string | null;
+    reminder_date_enabled?: number;
+    reminder_days_before?: number;
+    reminder_target_reached_enabled?: number;
+  }) =>
     api.put<Saving>(`/savings/${id}`, data),
 
   delete: (id: number) =>

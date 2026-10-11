@@ -122,6 +122,11 @@ export interface Saving {
   name: string;
   target_amount_cents: number | null;
   current_amount_cents: number;
+  target_date?: string | null;
+  reminder_date_enabled?: number;
+  reminder_days_before?: number;
+  reminder_target_reached_enabled?: number;
+  target_reached_notified?: number;
   transactions_count?: number;
   created_at: string;
   updated_at: string;

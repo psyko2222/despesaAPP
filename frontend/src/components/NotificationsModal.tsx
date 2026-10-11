@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from './ui/button';
-import { Bell, Check, X, AlertCircle, Database, CheckCircle2, Trash2 } from 'lucide-react';
+import { Bell, Check, X, AlertCircle, Database, CheckCircle2, Trash2, Target, Sparkles } from 'lucide-react';
 
 interface Notification {
   id: number;
@@ -27,6 +27,11 @@ export function NotificationsModal({ isOpen, onClose, notifications = [], onMark
     switch (type) {
       case 'success':
         return <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />;
+      case 'saving_goal':
+      case 'goal':
+        return <Sparkles className="w-4 h-4 text-amber-500 flex-shrink-0" />;
+      case 'saving_deadline':
+        return <Target className="w-4 h-4 text-emerald-600 flex-shrink-0" />;
       case 'warning':
         return <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />;
       case 'backup':

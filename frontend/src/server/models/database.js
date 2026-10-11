@@ -169,6 +169,11 @@ async function initializeDatabase() {
         name VARCHAR(255) NOT NULL,
         target_amount_cents INTEGER DEFAULT NULL,
         current_amount_cents INTEGER NOT NULL DEFAULT 0,
+        target_date VARCHAR(50) DEFAULT NULL,
+        reminder_date_enabled INTEGER DEFAULT 0,
+        reminder_days_before INTEGER DEFAULT 7,
+        reminder_target_reached_enabled INTEGER DEFAULT 1,
+        target_reached_notified INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -195,6 +200,12 @@ async function initializeDatabase() {
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS no_value_reminder_days VARCHAR(50) DEFAULT '1,10,15,20';
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS backup_reminder_enabled INTEGER DEFAULT 1;
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS backup_reminder_day INTEGER DEFAULT 21;
+
+      ALTER TABLE savings ADD COLUMN IF NOT EXISTS target_date VARCHAR(50) DEFAULT NULL;
+      ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_date_enabled INTEGER DEFAULT 0;
+      ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_days_before INTEGER DEFAULT 7;
+      ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_target_reached_enabled INTEGER DEFAULT 1;
+      ALTER TABLE savings ADD COLUMN IF NOT EXISTS target_reached_notified INTEGER DEFAULT 0;
     `);
 
     await client.query('COMMIT');

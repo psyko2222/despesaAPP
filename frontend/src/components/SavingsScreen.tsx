@@ -22,7 +22,8 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   Sparkles,
-  Calendar
+  Calendar,
+  Bell
 } from 'lucide-react';
 
 export function SavingsScreen() {
@@ -36,6 +37,10 @@ export function SavingsScreen() {
   const [formName, setFormName] = useState('');
   const [formTarget, setFormTarget] = useState('');
   const [formInitial, setFormInitial] = useState('');
+  const [formTargetDate, setFormTargetDate] = useState('');
+  const [formReminderDate, setFormReminderDate] = useState(false);
+  const [formReminderDays, setFormReminderDays] = useState(7);
+  const [formReminderTarget, setFormReminderTarget] = useState(true);
   const [submittingForm, setSubmittingForm] = useState(false);
 
   // Modal Registar Movimento (+ Adicionar / - Subtrair)
@@ -86,6 +91,10 @@ export function SavingsScreen() {
     setFormName('');
     setFormTarget('');
     setFormInitial('');
+    setFormTargetDate('');
+    setFormReminderDate(false);
+    setFormReminderDays(7);
+    setFormReminderTarget(true);
     setIsFormOpen(true);
   };
 
@@ -95,6 +104,10 @@ export function SavingsScreen() {
     setFormName(saving.name);
     setFormTarget(saving.target_amount_cents ? (saving.target_amount_cents / 100).toString() : '');
     setFormInitial('');
+    setFormTargetDate(saving.target_date || '');
+    setFormReminderDate(saving.reminder_date_enabled === 1);
+    setFormReminderDays(saving.reminder_days_before || 7);
+    setFormReminderTarget(saving.reminder_target_reached_enabled !== 0);
     setIsFormOpen(true);
   };
 
@@ -110,18 +123,30 @@ export function SavingsScreen() {
     try {
       const targetCents = formTarget.trim() !== '' ? Math.round(parseFloat(formTarget.replace(',', '.')) * 100) : null;
       const initialCents = formInitial.trim() !== '' ? Math.round(parseFloat(formInitial.replace(',', '.')) * 100) : 0;
+      const cleanTargetDate = formTargetDate.trim() ? formTargetDate.trim() : null;
+      const cleanReminderDate = formReminderDate ? 1 : 0;
+      const cleanReminderDays = formReminderDays || 7;
+      const cleanReminderTarget = formReminderTarget ? 1 : 0;
 
       if (editingSaving) {
         await savingsAPI.update(editingSaving.id, {
           name: formName.trim(),
-          target_amount_cents: targetCents && targetCents > 0 ? targetCents : null
+          target_amount_cents: targetCents && targetCents > 0 ? targetCents : null,
+          target_date: cleanTargetDate,
+          reminder_date_enabled: cleanReminderDate,
+          reminder_days_before: cleanReminderDays,
+          reminder_target_reached_enabled: cleanReminderTarget
         });
         toast.success('Poupança atualizada com sucesso!');
       } else {
         await savingsAPI.create({
           name: formName.trim(),
           target_amount_cents: targetCents && targetCents > 0 ? targetCents : null,
-          initial_amount_cents: initialCents && initialCents > 0 ? initialCents : 0
+          initial_amount_cents: initialCents && initialCents > 0 ? initialCents : 0,
+          target_date: cleanTargetDate,
+          reminder_date_enabled: cleanReminderDate,
+          reminder_days_before: cleanReminderDays,
+          reminder_target_reached_enabled: cleanReminderTarget
         });
         toast.success('Poupança criada com sucesso!');
       }
@@ -310,6 +335,35 @@ export function SavingsScreen() {
             const isCompleted = hasTarget && currentCents >= targetCents;
             const progressPercent = hasTarget ? Math.min(100, Math.round((currentCents / targetCents) * 100)) : 0;
 
+            // Cálculo do prazo / data limite
+            const hasTargetDate = !!saving.target_date;
+            let daysRemaining: number | null = null;
+            let deadlineStatusText = '';
+            let deadlineStatusBadge = '';
+
+            if (hasTargetDate && saving.target_date) {
+              const [y, m, d] = saving.target_date.split('-').map(Number);
+              const targetD = new Date(y, m - 1, d);
+              const now = new Date();
+              const todayD = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const diffTime = targetD.getTime() - todayD.getTime();
+              daysRemaining = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+              if (daysRemaining > 1) {
+                deadlineStatusText = `Faltam ${daysRemaining} dias`;
+                deadlineStatusBadge = 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 dark:border-blue-800';
+              } else if (daysRemaining === 1) {
+                deadlineStatusText = 'Termina amanhã!';
+                deadlineStatusBadge = 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-800 font-semibold';
+              } else if (daysRemaining === 0) {
+                deadlineStatusText = 'Termina hoje!';
+                deadlineStatusBadge = 'bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300 border-orange-200 dark:border-orange-800 font-bold';
+              } else {
+                deadlineStatusText = `Prazo ultrapassado (${Math.abs(daysRemaining)}d)`;
+                deadlineStatusBadge = 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200 dark:border-rose-800';
+              }
+            }
+
             return (
               <Card 
                 key={saving.id}
@@ -330,15 +384,48 @@ export function SavingsScreen() {
                         <h3 className="font-bold text-gray-900 dark:text-gray-100 text-base leading-tight">
                           {saving.name}
                         </h3>
-                        {hasTarget ? (
-                          <span className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
-                            <Target className="w-3 h-3 text-gray-400" />
-                            Meta: {formatMoney(targetCents)}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5 block">
-                            Acumulação livre (Sem meta)
-                          </span>
+
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          {hasTarget ? (
+                            <span className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                              <Target className="w-3 h-3 text-gray-400" />
+                              Meta: {formatMoney(targetCents)}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                              Acumulação livre
+                            </span>
+                          )}
+
+                          {hasTargetDate && (
+                            <span className="text-[11px] text-gray-600 dark:text-gray-300 flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded font-medium">
+                              <Calendar className="w-3 h-3 text-gray-500" />
+                              {formatDate(saving.target_date!)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Badges de Lembretes e Estado do Prazo */}
+                        {(hasTargetDate || saving.reminder_date_enabled === 1 || saving.reminder_target_reached_enabled === 1) && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                            {hasTargetDate && (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${deadlineStatusBadge}`}>
+                                {deadlineStatusText}
+                              </span>
+                            )}
+                            {saving.reminder_date_enabled === 1 && hasTargetDate && (
+                              <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60 font-medium" title={`Lembrete programado para ${saving.reminder_days_before || 7} dias antes da data limite`}>
+                                <Bell className="w-2.5 h-2.5 text-emerald-600" />
+                                {saving.reminder_days_before || 7}d antes
+                              </span>
+                            )}
+                            {saving.reminder_target_reached_enabled === 1 && hasTarget && (
+                              <span className="inline-flex items-center gap-1 text-[10px] bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800/60 font-medium" title="Notificação ativa ao completar a meta">
+                                <Sparkles className="w-2.5 h-2.5 text-amber-600" />
+                                Alerta meta
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -517,6 +604,122 @@ export function SavingsScreen() {
                   </p>
                 </div>
               )}
+
+              {/* Data Limite / Prazo */}
+              <div>
+                <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1 flex items-center justify-between">
+                  <span>Data Limite (Prazo)</span>
+                  <span className="text-[10px] font-normal text-gray-400 lowercase">opcional</span>
+                </label>
+                <div className="relative">
+                  <Input
+                    type="date"
+                    value={formTargetDate}
+                    onChange={(e) => setFormTargetDate(e.target.value)}
+                    className="text-sm"
+                  />
+                  {formTargetDate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormTargetDate('');
+                        setFormReminderDate(false);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800"
+                      title="Limpar data limite"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                  Defina um prazo caso pretenda completar esta poupança até uma data específica.
+                </p>
+              </div>
+
+              {/* Notificações Selecionáveis */}
+              <div className="bg-emerald-50/50 dark:bg-gray-800/60 rounded-xl p-3.5 border border-emerald-100 dark:border-gray-700 space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-gray-100">
+                  <Bell className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Notificações e Alertas Programados</span>
+                </div>
+
+                {/* Opção 1: Aproximação da Data Limite */}
+                <div className="space-y-2">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formReminderDate}
+                      onChange={(e) => {
+                        if (!formTargetDate && !formReminderDate) {
+                          toast.error('Indique primeiro uma data limite para ativar este aviso');
+                          return;
+                        }
+                        setFormReminderDate(e.target.checked);
+                      }}
+                      className="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div className="flex-1">
+                      <span className={`text-xs font-semibold ${formTargetDate ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                        Avisar sobre aproximação da data limite
+                      </span>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                        {formTargetDate 
+                          ? 'Notificação agendada na aplicação e push antes de atingir o prazo.'
+                          : 'Defina uma data limite acima para programar este aviso.'}
+                      </p>
+                    </div>
+                  </label>
+
+                  {formReminderDate && formTargetDate && (
+                    <div className="pl-6 pt-1 flex items-center gap-2">
+                      <label className="text-[11px] font-medium text-gray-600 dark:text-gray-300">
+                        Antecedência do aviso:
+                      </label>
+                      <select
+                        value={formReminderDays}
+                        onChange={(e) => setFormReminderDays(parseInt(e.target.value, 10))}
+                        className="text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1 text-gray-800 dark:text-gray-200 focus:outline-hidden focus:ring-1 focus:ring-emerald-500 font-medium"
+                      >
+                        <option value={1}>1 dia antes</option>
+                        <option value={3}>3 dias antes</option>
+                        <option value={5}>5 dias antes</option>
+                        <option value={7}>7 dias antes (recomendado)</option>
+                        <option value={15}>15 dias antes</option>
+                        <option value={30}>30 dias antes</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Opção 2: Valor Definido / Meta Completado */}
+                <div className="pt-2.5 border-t border-emerald-100/80 dark:border-gray-700/80">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formReminderTarget}
+                      onChange={(e) => {
+                        if (!formTarget && !formReminderTarget) {
+                          toast.error('Indique primeiro um valor a atingir / meta para ativar este aviso');
+                          return;
+                        }
+                        setFormReminderTarget(e.target.checked);
+                      }}
+                      className="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div className="flex-1">
+                      <span className={`text-xs font-semibold ${formTarget && parseFloat(formTarget.replace(',', '.')) > 0 ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                        Avisar quando o valor definido for completado
+                      </span>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                        {formTarget && parseFloat(formTarget.replace(',', '.')) > 0
+                          ? 'Notificação imediata assim que atingir 100% do objetivo estipulado.'
+                          : 'Defina um valor de meta acima para ativar.'}
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
 
               <div className="flex gap-2 justify-end pt-3">
                 <Button
