@@ -67,7 +67,8 @@ export default function HomePage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data);
+        const list = Array.isArray(data) ? data : (data.notifications || []);
+        setNotifications(list);
       }
     } catch (e) {
       console.error(e);
@@ -83,6 +84,8 @@ export default function HomePage() {
   }, [user]);
 
   const markNotificationsAsRead = async (ids?: number[]) => {
+    // Atualização otimista imediata para limpar o badge e chamar a atenção
+    setNotifications(prev => prev.map(n => (!ids || ids.includes(n.id)) ? { ...n, is_read: 1 } : n));
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
@@ -100,7 +103,17 @@ export default function HomePage() {
     }
   };
 
-  const unreadCount = useMemo(() => notifications.filter(n => !n.is_read).length, [notifications]);
+  const handleOpenNotifications = () => {
+    setIsNotificationsOpen(true);
+    // Ao clicar em cima do sino, passam imediatamente a lidas
+    if (unreadCount > 0) {
+      markNotificationsAsRead();
+    }
+  };
+
+  const unreadCount = useMemo(() => {
+    return Array.isArray(notifications) ? notifications.filter(n => Number(n.is_read) === 0).length : 0;
+  }, [notifications]);
 
   // Totais e prazos calculados de forma reativa
   const totalExpenses = useMemo(() => expenses.reduce((sum, exp) => sum + exp.amount_cents, 0), [expenses]);
@@ -397,10 +410,16 @@ export default function HomePage() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => setIsNotificationsOpen(true)} className="relative">
-              <Bell className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={handleOpenNotifications} 
+              className="relative p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+              title="Notificações"
+            >
+              <Bell className={`w-5 h-5 transition-transform ${unreadCount > 0 ? 'text-primary-600 dark:text-primary-400 rotate-12' : 'text-gray-700 dark:text-gray-200'}`} />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                <span className="absolute -top-1 -right-1 min-w-[19px] h-[19px] px-1 flex items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-md ring-2 ring-white dark:ring-gray-900 animate-pulse">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}

@@ -11,7 +11,7 @@ router.get('/', authenticateToken, async (req, res) => {
       : 'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50';
     const result = await query(sql, [req.user.id]);
     const notifications = isPostgres ? (result.rows || result) : result;
-    res.json({ notifications: notifications || [] });
+    res.json(notifications || []);
   } catch (err) {
     console.error('Erro ao obter notificacoes:', err);
     res.status(500).json({ error: 'Erro ao obter notificacoes' });
