@@ -23,10 +23,23 @@ import {
   ArrowDownRight,
   Sparkles,
   Calendar,
-  Bell
+  Bell,
+  Users
 } from 'lucide-react';
 
-export function SavingsScreen() {
+export interface SavingsScreenProps {
+  userId?: number;
+  permissions?: {
+    can_write: boolean;
+    can_delete: boolean;
+  };
+  accountEmail?: string;
+}
+
+export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScreenProps = {}) {
+  const isShared = Boolean(userId);
+  const canWrite = !isShared || (permissions?.can_write ?? false);
+  const canDelete = !isShared || (permissions?.can_delete ?? false);
   const toast = useToast();
   const [savings, setSavings] = useState<Saving[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,12 +74,12 @@ export function SavingsScreen() {
 
   useEffect(() => {
     loadSavings();
-  }, []);
+  }, [userId]);
 
   const loadSavings = async () => {
     setLoading(true);
     try {
-      const res = await savingsAPI.getAll();
+      const res = await savingsAPI.getAll(userId);
       setSavings(res.data);
     } catch (err) {
       console.error('Falha ao carregar poupanças:', err);
@@ -146,7 +159,8 @@ export function SavingsScreen() {
           target_date: cleanTargetDate,
           reminder_date_enabled: cleanReminderDate,
           reminder_days_before: cleanReminderDays,
-          reminder_target_reached_enabled: cleanReminderTarget
+          reminder_target_reached_enabled: cleanReminderTarget,
+          userId: userId
         });
         toast.success('Poupança criada com sucesso!');
       }
@@ -272,20 +286,35 @@ export function SavingsScreen() {
               <span className="p-1.5 bg-white/20 rounded-lg backdrop-blur-sm">
                 <PiggyBank className="w-5 h-5 text-white" />
               </span>
-              <h2 className="text-lg sm:text-xl font-bold tracking-tight">As Minhas Poupanças</h2>
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight">
+                {isShared ? `Poupanças de ${accountEmail || 'Conta Partilhada'}` : 'As Minhas Poupanças'}
+              </h2>
             </div>
             <p className="text-emerald-100 text-xs sm:text-sm">
-              Faça a gestão dos seus mealheiros, fundos de emergência e objetivos financeiros.
+              {isShared
+                ? (canWrite
+                    ? 'A gerir as poupanças desta conta partilhada com permissão de edição.'
+                    : 'A visualizar as poupanças desta conta partilhada (apenas leitura).')
+                : 'Faça a gestão dos seus mealheiros, fundos de emergência e objetivos financeiros.'}
             </p>
+            {isShared && (
+              <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] bg-white/20 backdrop-blur-md text-white font-medium">
+                <Users className="w-3.5 h-3.5" />
+                <span>Conta Partilhada</span>
+                <span className="opacity-90">• {canWrite ? (canDelete ? 'Acesso total' : 'Pode editar') : 'Apenas leitura'}</span>
+              </div>
+            )}
           </div>
 
-          <Button
-            onClick={handleOpenCreate}
-            className="bg-white text-emerald-800 hover:bg-emerald-50 font-semibold shadow-sm text-xs sm:text-sm h-10 px-4 rounded-xl flex items-center gap-2 w-full sm:w-auto justify-center"
-          >
-            <Plus className="w-4 h-4 text-emerald-700" />
-            Nova Poupança
-          </Button>
+          {canWrite && (
+            <Button
+              onClick={handleOpenCreate}
+              className="bg-white text-emerald-800 hover:bg-emerald-50 font-semibold shadow-sm text-xs sm:text-sm h-10 px-4 rounded-xl flex items-center gap-2 w-full sm:w-auto justify-center"
+            >
+              <Plus className="w-4 h-4 text-emerald-700" />
+              Nova Poupança
+            </Button>
+          )}
         </div>
 
         <div className="mt-6 pt-4 border-t border-white/20 grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -314,15 +343,23 @@ export function SavingsScreen() {
               <PiggyBank className="w-7 h-7" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Ainda não tem poupanças criadas</h3>
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">
+                {isShared ? 'Esta conta ainda não tem poupanças criadas' : 'Ainda não tem poupanças criadas'}
+              </h3>
               <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-1">
-                Defina objetivos com metas específicas ou crie mealheiros livres para acumular dinheiro com controlo total de depósitos e retiradas.
+                {isShared
+                  ? (canWrite
+                      ? 'Pode criar um objetivo ou mealheiro nesta conta partilhada utilizando o botão abaixo.'
+                      : 'Esta conta ainda não possui poupanças e o seu acesso é apenas de leitura.')
+                  : 'Defina objetivos com metas específicas ou crie mealheiros livres para acumular dinheiro com controlo total de depósitos e retiradas.'}
               </p>
             </div>
-            <Button onClick={handleOpenCreate} className="text-xs sm:text-sm mt-2">
-              <Plus className="w-4 h-4 mr-1.5" />
-              Criar Primeira Poupança
-            </Button>
+            {canWrite && (
+              <Button onClick={handleOpenCreate} className="text-xs sm:text-sm mt-2">
+                <Plus className="w-4 h-4 mr-1.5" />
+                Criar Primeira Poupança
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -439,22 +476,26 @@ export function SavingsScreen() {
                       >
                         <History className="w-4 h-4" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEdit(saving)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                        title="Editar poupança"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSavingToDelete(saving)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                        title="Apagar poupança"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {canWrite && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(saving)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          title="Editar poupança"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => setSavingToDelete(saving)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                          title="Apagar poupança"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -508,27 +549,41 @@ export function SavingsScreen() {
                   </div>
 
                   {/* Botões Rápidos: Adicionar (+) e Subtrair (-) */}
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => handleOpenTransaction(saving, 'deposit')}
-                      className="h-9 text-xs font-semibold border-emerald-200 dark:border-emerald-800/80 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center justify-center gap-1.5"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Adicionar
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => handleOpenTransaction(saving, 'withdraw')}
-                      disabled={currentCents <= 0}
-                      className="h-9 text-xs font-semibold border-amber-200 dark:border-amber-800/80 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 flex items-center justify-center gap-1.5 disabled:opacity-50"
-                    >
-                      <Minus className="w-3.5 h-3.5" />
-                      Subtrair
-                    </Button>
-                  </div>
+                  {canWrite ? (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleOpenTransaction(saving, 'deposit')}
+                        className="h-9 text-xs font-semibold border-emerald-200 dark:border-emerald-800/80 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center justify-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Adicionar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleOpenTransaction(saving, 'withdraw')}
+                        disabled={currentCents <= 0}
+                        className="h-9 text-xs font-semibold border-amber-200 dark:border-amber-800/80 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                        Subtrair
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleOpenHistory(saving)}
+                        className="w-full h-8 text-xs font-medium border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-center gap-1.5"
+                      >
+                        <History className="w-3.5 h-3.5" />
+                        Ver Movimentos (Apenas Leitura)
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -899,14 +954,16 @@ export function SavingsScreen() {
                         }`}>
                           {isDeposit ? '+' : '-'}{formatMoney(tx.amount_cents)}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTransaction(tx.id)}
-                          className="p-1 text-gray-300 hover:text-red-500 transition-colors ml-1"
-                          title="Anular movimento"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTransaction(tx.id)}
+                            className="p-1 text-gray-300 hover:text-red-500 transition-colors ml-1"
+                            title="Anular movimento"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );

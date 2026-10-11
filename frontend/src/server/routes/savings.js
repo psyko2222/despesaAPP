@@ -128,10 +128,108 @@ async function ensureTables() {
   }
 }
 
-// Obter todas as poupanças do utilizador
+async function checkUserAccess(req, targetUserId) {
+  const currentUserId = req.user.id;
+  const tid = targetUserId ? parseInt(targetUserId, 10) : null;
+  if (!tid || isNaN(tid) || tid === currentUserId) {
+    return {
+      userId: currentUserId,
+      canRead: true,
+      canWrite: true,
+      canDelete: true,
+      isShared: false
+    };
+  }
+
+  const shareSql = isPostgres
+    ? `SELECT * FROM account_shares 
+       WHERE (owner_id = $1 AND shared_with_id = $2 AND status = 'accepted')
+          OR (owner_id = $3 AND shared_with_id = $4 AND status = 'accepted')`
+    : `SELECT * FROM account_shares 
+       WHERE (owner_id = ? AND shared_with_id = ? AND status = 'accepted')
+          OR (owner_id = ? AND shared_with_id = ? AND status = 'accepted')`;
+
+  const shareRes = await query(shareSql, [currentUserId, tid, tid, currentUserId]);
+  const shares = isPostgres ? shareRes.rows : shareRes;
+  const share = shares && shares[0];
+
+  if (!share) {
+    return null;
+  }
+
+  if (share.owner_id === currentUserId) {
+    return {
+      userId: currentUserId,
+      canRead: true,
+      canWrite: true,
+      canDelete: true,
+      isShared: false
+    };
+  }
+
+  return {
+    userId: tid,
+    canRead: share.can_read === 1,
+    canWrite: share.can_write === 1,
+    canDelete: share.can_delete === 1,
+    isShared: true
+  };
+}
+
+async function getSavingAndCheckAccess(savingId, currentUserId) {
+  const sql = isPostgres
+    ? 'SELECT * FROM savings WHERE id = $1'
+    : 'SELECT * FROM savings WHERE id = ?';
+  const res = await query(sql, [savingId]);
+  const savings = isPostgres ? res.rows : res;
+  const saving = savings && savings[0];
+
+  if (!saving) {
+    return { saving: null, status: 404, error: 'Poupança não encontrada' };
+  }
+
+  if (saving.user_id === currentUserId) {
+    return {
+      saving,
+      canRead: true,
+      canWrite: true,
+      canDelete: true,
+      isShared: false
+    };
+  }
+
+  const shareSql = isPostgres
+    ? `SELECT * FROM account_shares 
+       WHERE owner_id = $1 AND shared_with_id = $2 AND status = 'accepted'`
+    : `SELECT * FROM account_shares 
+       WHERE owner_id = ? AND shared_with_id = ? AND status = 'accepted'`;
+  const shareRes = await query(shareSql, [saving.user_id, currentUserId]);
+  const shares = isPostgres ? shareRes.rows : shareRes;
+  const share = shares && shares[0];
+
+  if (!share) {
+    return { saving: null, status: 403, error: 'Sem permissão para aceder a esta poupança' };
+  }
+
+  return {
+    saving,
+    canRead: share.can_read === 1,
+    canWrite: share.can_write === 1,
+    canDelete: share.can_delete === 1,
+    isShared: true
+  };
+}
+
+// Obter todas as poupanças do utilizador ou de conta partilhada
 router.get('/', authenticateToken, async (req, res) => {
   await ensureTables();
   try {
+    const targetUserId = req.query.userId || req.query.user_id;
+    const access = await checkUserAccess(req, targetUserId);
+    if (!access || !access.canRead) {
+      return res.status(403).json({ error: 'Sem permissão para aceder a estas poupanças' });
+    }
+
     const sql = isPostgres
       ? `SELECT s.*, 
                 (SELECT COUNT(*) FROM saving_transactions st WHERE st.saving_id = s.id) as transactions_count
@@ -144,7 +242,7 @@ router.get('/', authenticateToken, async (req, res) => {
          WHERE s.user_id = ? 
          ORDER BY s.id ASC`;
 
-    const result = await query(sql, [req.user.id]);
+    const result = await query(sql, [access.userId]);
     const savings = isPostgres ? (result.rows || result) : result;
     res.json(savings || []);
   } catch (err) {
@@ -153,7 +251,7 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Criar nova poupança
+// Criar nova poupança (própria ou em conta partilhada)
 router.post('/', authenticateToken, async (req, res) => {
   await ensureTables();
   try {
@@ -164,8 +262,14 @@ router.post('/', authenticateToken, async (req, res) => {
       target_date,
       reminder_date_enabled,
       reminder_days_before,
-      reminder_target_reached_enabled
+      reminder_target_reached_enabled,
+      userId
     } = req.body;
+
+    const access = await checkUserAccess(req, userId);
+    if (!access || !access.canWrite) {
+      return res.status(403).json({ error: 'Sem permissão para criar poupanças nesta conta' });
+    }
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'O nome da poupança é obrigatório' });
@@ -200,7 +304,7 @@ router.post('/', authenticateToken, async (req, res) => {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     const insertRes = await query(insertSql, [
-      req.user.id, name.trim(), targetVal, initialVal,
+      access.userId, name.trim(), targetVal, initialVal,
       cleanTargetDate, cleanReminderDate, cleanReminderDays,
       cleanReminderTarget, targetNotified
     ]);
@@ -222,18 +326,26 @@ router.post('/', authenticateToken, async (req, res) => {
            VALUES ($1, $2, $3, $4, $5, $6)`
         : `INSERT INTO saving_transactions (saving_id, user_id, amount_cents, type, description, date)
            VALUES (?, ?, ?, ?, ?, ?)`;
-      await query(transSql, [newSaving.id, req.user.id, initialVal, 'deposit', 'Valor inicial', today]);
+      await query(transSql, [newSaving.id, access.userId, initialVal, 'deposit', 'Valor inicial', today]);
     }
 
     // Se a meta foi atingida logo na criação e as notificações de meta estão ativas
     if (isInitiallyCompleted && cleanReminderTarget === 1) {
       const valStr = (targetVal / 100).toFixed(2).replace('.', ',') + ' €';
-      await sendNotificationToUser(req.user.id, {
+      await sendNotificationToUser(access.userId, {
         title: `🎉 Meta Atingida: ${name.trim()}!`,
         message: `Parabéns! Atingiu o objetivo definido de ${valStr} na poupança "${name.trim()}"!`,
         type: 'saving_goal',
         tag: `saving-goal-${newSaving.id}`
       });
+      if (req.user.id !== access.userId) {
+        await sendNotificationToUser(req.user.id, {
+          title: `🎉 Meta Atingida: ${name.trim()}!`,
+          message: `Parabéns! Atingiu o objetivo definido de ${valStr} na poupança partilhada "${name.trim()}"!`,
+          type: 'saving_goal',
+          tag: `saving-goal-${newSaving.id}`
+        });
+      }
     }
 
     res.status(201).json(newSaving);
@@ -248,6 +360,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
   await ensureTables();
   try {
     const { id } = req.params;
+    const access = await getSavingAndCheckAccess(id, req.user.id);
+    if (!access.saving) {
+      return res.status(access.status).json({ error: access.error });
+    }
+    if (!access.canWrite) {
+      return res.status(403).json({ error: 'Sem permissão para editar esta poupança' });
+    }
+
     const { 
       name, 
       target_amount_cents,
@@ -270,17 +390,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const cleanReminderDays = parseInt(reminder_days_before, 10) || 7;
     const cleanReminderTarget = (reminder_target_reached_enabled === 0 || reminder_target_reached_enabled === false || reminder_target_reached_enabled === '0') ? 0 : 1;
 
-    // Obter estado anterior da poupança
-    const currentSql = isPostgres
-      ? 'SELECT * FROM savings WHERE id = $1 AND user_id = $2'
-      : 'SELECT * FROM savings WHERE id = ? AND user_id = ?';
-    const currentRes = await query(currentSql, [id, req.user.id]);
-    const prevSaving = isPostgres ? currentRes.rows[0] : currentRes[0];
-
-    if (!prevSaving) {
-      return res.status(404).json({ error: 'Poupança não encontrada' });
-    }
-
+    const prevSaving = access.saving;
     let targetNotified = prevSaving.target_reached_notified || 0;
     const currentAmount = prevSaving.current_amount_cents || 0;
 
@@ -300,30 +410,38 @@ router.put('/:id', authenticateToken, async (req, res) => {
              reminder_date_enabled = $4, reminder_days_before = $5,
              reminder_target_reached_enabled = $6, target_reached_notified = $7,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $8 AND user_id = $9 RETURNING *`
+         WHERE id = $8 RETURNING *`
       : `UPDATE savings 
          SET name = ?, target_amount_cents = ?, target_date = ?,
              reminder_date_enabled = ?, reminder_days_before = ?,
              reminder_target_reached_enabled = ?, target_reached_notified = ?,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = ? AND user_id = ?`;
+         WHERE id = ?`;
 
     const updateRes = await query(updateSql, [
       name.trim(), targetVal, cleanTargetDate,
       cleanReminderDate, cleanReminderDays,
       cleanReminderTarget, targetNotified,
-      id, req.user.id
+      id
     ]);
     const updated = isPostgres ? updateRes.rows[0] : null;
 
     if (shouldNotifyGoal) {
       const valStr = (targetVal / 100).toFixed(2).replace('.', ',') + ' €';
-      await sendNotificationToUser(req.user.id, {
+      await sendNotificationToUser(prevSaving.user_id, {
         title: `🎉 Meta Atingida: ${name.trim()}!`,
         message: `Parabéns! Atingiu o objetivo definido de ${valStr} na poupança "${name.trim()}"!`,
         type: 'saving_goal',
         tag: `saving-goal-${id}`
       });
+      if (req.user.id !== prevSaving.user_id) {
+        await sendNotificationToUser(req.user.id, {
+          title: `🎉 Meta Atingida: ${name.trim()}!`,
+          message: `Parabéns! Atingiu o objetivo definido de ${valStr} na poupança partilhada "${name.trim()}"!`,
+          type: 'saving_goal',
+          tag: `saving-goal-${id}`
+        });
+      }
     }
 
     res.json(updated || { 
@@ -346,11 +464,19 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   await ensureTables();
   try {
     const { id } = req.params;
-    const deleteSql = isPostgres
-      ? 'DELETE FROM savings WHERE id = $1 AND user_id = $2'
-      : 'DELETE FROM savings WHERE id = ? AND user_id = ?';
+    const access = await getSavingAndCheckAccess(id, req.user.id);
+    if (!access.saving) {
+      return res.status(access.status).json({ error: access.error });
+    }
+    if (!access.canDelete) {
+      return res.status(403).json({ error: 'Sem permissão para apagar esta poupança' });
+    }
 
-    await query(deleteSql, [id, req.user.id]);
+    const deleteSql = isPostgres
+      ? 'DELETE FROM savings WHERE id = $1'
+      : 'DELETE FROM savings WHERE id = ?';
+
+    await query(deleteSql, [id]);
     res.json({ success: true, message: 'Poupança apagada com sucesso' });
   } catch (err) {
     console.error('Erro ao apagar poupança:', err);
@@ -363,15 +489,23 @@ router.get('/:id/transactions', authenticateToken, async (req, res) => {
   await ensureTables();
   try {
     const { id } = req.params;
+    const access = await getSavingAndCheckAccess(id, req.user.id);
+    if (!access.saving) {
+      return res.status(access.status).json({ error: access.error });
+    }
+    if (!access.canRead) {
+      return res.status(403).json({ error: 'Sem permissão para consultar os movimentos desta poupança' });
+    }
+
     const sql = isPostgres
       ? `SELECT * FROM saving_transactions 
-         WHERE saving_id = $1 AND user_id = $2 
+         WHERE saving_id = $1 
          ORDER BY date DESC, id DESC`
       : `SELECT * FROM saving_transactions 
-         WHERE saving_id = ? AND user_id = ? 
+         WHERE saving_id = ? 
          ORDER BY date DESC, id DESC`;
 
-    const result = await query(sql, [id, req.user.id]);
+    const result = await query(sql, [id]);
     const transactions = isPostgres ? (result.rows || result) : result;
     res.json(transactions || []);
   } catch (err) {
@@ -385,6 +519,15 @@ router.post('/:id/transactions', authenticateToken, async (req, res) => {
   await ensureTables();
   try {
     const { id } = req.params;
+    const access = await getSavingAndCheckAccess(id, req.user.id);
+    if (!access.saving) {
+      return res.status(access.status).json({ error: access.error });
+    }
+    if (!access.canWrite) {
+      return res.status(403).json({ error: 'Sem permissão para registar movimentos nesta poupança' });
+    }
+
+    const saving = access.saving;
     const { amount_cents, type, description, date } = req.body;
 
     const amount = parseInt(amount_cents, 10);
@@ -394,17 +537,6 @@ router.post('/:id/transactions', authenticateToken, async (req, res) => {
 
     if (type !== 'deposit' && type !== 'withdraw') {
       return res.status(400).json({ error: 'Tipo inválido (deve ser "deposit" ou "withdraw")' });
-    }
-
-    // Verificar se poupança existe e pertence ao utilizador
-    const checkSql = isPostgres
-      ? 'SELECT * FROM savings WHERE id = $1 AND user_id = $2'
-      : 'SELECT * FROM savings WHERE id = ? AND user_id = ?';
-    const checkRes = await query(checkSql, [id, req.user.id]);
-    const saving = isPostgres ? checkRes.rows[0] : checkRes[0];
-
-    if (!saving) {
-      return res.status(404).json({ error: 'Poupança não encontrada' });
     }
 
     // Se for withdraw, validar saldo se não quiser deixar negativo
@@ -417,13 +549,13 @@ router.post('/:id/transactions', authenticateToken, async (req, res) => {
     const txDate = date || new Date().toISOString().split('T')[0];
     const txDesc = description && description.trim() ? description.trim() : (type === 'deposit' ? 'Depósito' : 'Retirada');
 
-    // Inserir transação
+    // Inserir transação com o user_id do proprietário da poupança
     const insertTxSql = isPostgres
       ? `INSERT INTO saving_transactions (saving_id, user_id, amount_cents, type, description, date)
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`
       : `INSERT INTO saving_transactions (saving_id, user_id, amount_cents, type, description, date)
          VALUES (?, ?, ?, ?, ?, ?)`;
-    const txRes = await query(insertTxSql, [id, req.user.id, amount, type, txDesc, txDate]);
+    const txRes = await query(insertTxSql, [id, saving.user_id, amount, type, txDesc, txDate]);
     const newTx = isPostgres ? txRes.rows[0] : null;
 
     // Atualizar saldo da poupança
@@ -449,21 +581,29 @@ router.post('/:id/transactions', authenticateToken, async (req, res) => {
     const updateSavingSql = isPostgres
       ? `UPDATE savings 
          SET current_amount_cents = current_amount_cents + $1, target_reached_notified = $2, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3 AND user_id = $4 RETURNING *`
+         WHERE id = $3 RETURNING *`
       : `UPDATE savings 
          SET current_amount_cents = current_amount_cents + ?, target_reached_notified = ?, updated_at = CURRENT_TIMESTAMP
-         WHERE id = ? AND user_id = ?`;
-    const updateRes = await query(updateSavingSql, [delta, targetNotified, id, req.user.id]);
+         WHERE id = ?`;
+    const updateRes = await query(updateSavingSql, [delta, targetNotified, id]);
     const updatedSaving = isPostgres ? updateRes.rows[0] : null;
 
     if (shouldNotifyGoal) {
       const valStr = (saving.target_amount_cents / 100).toFixed(2).replace('.', ',') + ' €';
-      await sendNotificationToUser(req.user.id, {
+      await sendNotificationToUser(saving.user_id, {
         title: `🎉 Meta Atingida: ${saving.name}!`,
         message: `Parabéns! Atingiu o objetivo definido de ${valStr} na poupança "${saving.name}"!`,
         type: 'saving_goal',
         tag: `saving-goal-${saving.id}`
       });
+      if (req.user.id !== saving.user_id) {
+        await sendNotificationToUser(req.user.id, {
+          title: `🎉 Meta Atingida: ${saving.name}!`,
+          message: `Parabéns! Atingiu o objetivo definido de ${valStr} na poupança partilhada "${saving.name}"!`,
+          type: 'saving_goal',
+          tag: `saving-goal-${saving.id}`
+        });
+      }
     }
 
     res.json({
@@ -483,27 +623,35 @@ router.delete('/transactions/:txId', authenticateToken, async (req, res) => {
   try {
     const { txId } = req.params;
     const findSql = isPostgres
-      ? 'SELECT * FROM saving_transactions WHERE id = $1 AND user_id = $2'
-      : 'SELECT * FROM saving_transactions WHERE id = ? AND user_id = ?';
-    const findRes = await query(findSql, [txId, req.user.id]);
-    const tx = isPostgres ? findRes.rows[0] : findRes[0];
+      ? 'SELECT * FROM saving_transactions WHERE id = $1'
+      : 'SELECT * FROM saving_transactions WHERE id = ?';
+    const findRes = await query(findSql, [txId]);
+    const tx = isPostgres ? (findRes.rows ? findRes.rows[0] : findRes[0]) : findRes[0];
 
     if (!tx) {
       return res.status(404).json({ error: 'Movimento não encontrado' });
     }
 
+    const access = await getSavingAndCheckAccess(tx.saving_id, req.user.id);
+    if (!access.saving) {
+      return res.status(access.status).json({ error: access.error });
+    }
+    if (!access.canDelete) {
+      return res.status(403).json({ error: 'Sem permissão para anular movimentos nesta poupança' });
+    }
+
     // Reverter o saldo da poupança (se era deposit, subtrai; se era withdraw, adiciona)
     const revertDelta = tx.type === 'deposit' ? -tx.amount_cents : tx.amount_cents;
     const updateSql = isPostgres
-      ? `UPDATE savings SET current_amount_cents = current_amount_cents + $1 WHERE id = $2 AND user_id = $3`
-      : `UPDATE savings SET current_amount_cents = current_amount_cents + ? WHERE id = ? AND user_id = ?`;
-    await query(updateSql, [revertDelta, tx.saving_id, req.user.id]);
+      ? `UPDATE savings SET current_amount_cents = current_amount_cents + $1 WHERE id = $2`
+      : `UPDATE savings SET current_amount_cents = current_amount_cents + ? WHERE id = ?`;
+    await query(updateSql, [revertDelta, tx.saving_id]);
 
     // Apagar transação
     const delSql = isPostgres
-      ? 'DELETE FROM saving_transactions WHERE id = $1 AND user_id = $2'
-      : 'DELETE FROM saving_transactions WHERE id = ? AND user_id = ?';
-    await query(delSql, [txId, req.user.id]);
+      ? 'DELETE FROM saving_transactions WHERE id = $1'
+      : 'DELETE FROM saving_transactions WHERE id = ?';
+    await query(delSql, [txId]);
 
     res.json({ success: true, message: 'Movimento cancelado e saldo revertido' });
   } catch (err) {

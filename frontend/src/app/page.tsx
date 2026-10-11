@@ -925,7 +925,11 @@ export default function HomePage() {
         )}
 
         {activeTab === 'savings' && (
-          <SavingsScreen />
+          <SavingsScreen
+            userId={selectedAccount?.id}
+            permissions={selectedAccount?.permissions}
+            accountEmail={selectedAccount?.email}
+          />
         )}
 
         {activeTab === 'shares' && (

@@ -197,8 +197,8 @@ export const adminAPI = {
 };
 
 export const savingsAPI = {
-  getAll: () =>
-    api.get<Saving[]>('/savings'),
+  getAll: (userId?: number) =>
+    api.get<Saving[]>(userId ? `/savings?userId=${userId}` : '/savings'),
 
   create: (data: { 
     name: string; 
@@ -208,6 +208,7 @@ export const savingsAPI = {
     reminder_date_enabled?: number;
     reminder_days_before?: number;
     reminder_target_reached_enabled?: number;
+    userId?: number;
   }) =>
     api.post<Saving>('/savings', data),
 
