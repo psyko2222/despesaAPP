@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/toast';
 import { savingsAPI } from '@/lib/api';
 import { Saving, SavingTransaction } from '@/types';
 import { formatMoney, formatDate } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 import { 
   PiggyBank, 
   Plus, 
@@ -24,7 +25,8 @@ import {
   Sparkles,
   Calendar,
   Bell,
-  Users
+  Users,
+  Lock
 } from 'lucide-react';
 
 export interface SavingsScreenProps {
@@ -37,6 +39,8 @@ export interface SavingsScreenProps {
 }
 
 export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScreenProps = {}) {
+  const { user } = useAuth();
+  const canPrivate = user?.role === 'admin_private';
   const isShared = Boolean(userId);
   const canWrite = !isShared || (permissions?.can_write ?? false);
   const canDelete = !isShared || (permissions?.can_delete ?? false);
@@ -54,6 +58,7 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
   const [formReminderDate, setFormReminderDate] = useState(false);
   const [formReminderDays, setFormReminderDays] = useState(7);
   const [formReminderTarget, setFormReminderTarget] = useState(true);
+  const [formIsPrivate, setFormIsPrivate] = useState(false);
   const [submittingForm, setSubmittingForm] = useState(false);
 
   // Modal Registar Movimento (+ Adicionar / - Subtrair)
@@ -108,6 +113,7 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
     setFormReminderDate(false);
     setFormReminderDays(7);
     setFormReminderTarget(true);
+    setFormIsPrivate(false);
     setIsFormOpen(true);
   };
 
@@ -121,6 +127,7 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
     setFormReminderDate(saving.reminder_date_enabled === 1);
     setFormReminderDays(saving.reminder_days_before || 7);
     setFormReminderTarget(saving.reminder_target_reached_enabled !== 0);
+    setFormIsPrivate(saving.is_private === 1);
     setIsFormOpen(true);
   };
 
@@ -148,7 +155,8 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
           target_date: cleanTargetDate,
           reminder_date_enabled: cleanReminderDate,
           reminder_days_before: cleanReminderDays,
-          reminder_target_reached_enabled: cleanReminderTarget
+          reminder_target_reached_enabled: cleanReminderTarget,
+          is_private: canPrivate && formIsPrivate ? 1 : 0
         });
         toast.success('Poupança atualizada com sucesso!');
       } else {
@@ -160,6 +168,7 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
           reminder_date_enabled: cleanReminderDate,
           reminder_days_before: cleanReminderDays,
           reminder_target_reached_enabled: cleanReminderTarget,
+          is_private: canPrivate && formIsPrivate ? 1 : 0,
           userId: userId
         });
         toast.success('Poupança criada com sucesso!');
@@ -438,6 +447,13 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
                             <span className="text-[11px] text-gray-600 dark:text-gray-300 flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded font-medium">
                               <Calendar className="w-3 h-3 text-gray-500" />
                               {formatDate(saving.target_date!)}
+                            </span>
+                          )}
+
+                          {saving.is_private === 1 && (
+                            <span className="text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-1 bg-amber-100 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800 px-1.5 py-0.5 rounded font-medium">
+                              <Lock className="w-3 h-3 text-amber-600" />
+                              Privada
                             </span>
                           )}
                         </div>
@@ -775,6 +791,22 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
                   </label>
                 </div>
               </div>
+
+              {canPrivate && (
+                <div className="flex items-center space-x-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                  <input
+                    type="checkbox"
+                    id="formIsPrivate"
+                    checked={formIsPrivate}
+                    onChange={(e) => setFormIsPrivate(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                  />
+                  <label htmlFor="formIsPrivate" className="text-xs font-semibold text-amber-800 dark:text-amber-300 cursor-pointer flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5" />
+                    Poupança Privada (visível apenas para mim)
+                  </label>
+                </div>
+              )}
 
               <div className="flex gap-2 justify-end pt-3">
                 <Button

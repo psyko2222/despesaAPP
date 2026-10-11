@@ -54,6 +54,7 @@ async function ensureTables() {
         reminder_days_before INTEGER DEFAULT 7,
         reminder_target_reached_enabled INTEGER DEFAULT 1,
         target_reached_notified INTEGER DEFAULT 0,
+        is_private INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -78,6 +79,7 @@ async function ensureTables() {
       ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_days_before INTEGER DEFAULT 7;
       ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_target_reached_enabled INTEGER DEFAULT 1;
       ALTER TABLE savings ADD COLUMN IF NOT EXISTS target_reached_notified INTEGER DEFAULT 0;
+      ALTER TABLE savings ADD COLUMN IF NOT EXISTS is_private INTEGER DEFAULT 0;
     ` : `
       CREATE TABLE IF NOT EXISTS savings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,6 +92,7 @@ async function ensureTables() {
         reminder_days_before INTEGER DEFAULT 7,
         reminder_target_reached_enabled INTEGER DEFAULT 1,
         target_reached_notified INTEGER DEFAULT 0,
+        is_private INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
@@ -113,7 +116,8 @@ async function ensureTables() {
         'reminder_date_enabled INTEGER DEFAULT 0',
         'reminder_days_before INTEGER DEFAULT 7',
         'reminder_target_reached_enabled INTEGER DEFAULT 1',
-        'target_reached_notified INTEGER DEFAULT 0'
+        'target_reached_notified INTEGER DEFAULT 0',
+        'is_private INTEGER DEFAULT 0'
       ];
       for (const col of sqliteCols) {
         try {
@@ -176,7 +180,10 @@ async function checkUserAccess(req, targetUserId) {
   };
 }
 
-async function getSavingAndCheckAccess(savingId, currentUserId) {
+async function getSavingAndCheckAccess(savingId, currentUser) {
+  const currentUserId = typeof currentUser === 'object' ? currentUser.id : currentUser;
+  const currentUserRole = typeof currentUser === 'object' ? currentUser.role : null;
+
   const sql = isPostgres
     ? 'SELECT * FROM savings WHERE id = $1'
     : 'SELECT * FROM savings WHERE id = ?';
@@ -185,6 +192,11 @@ async function getSavingAndCheckAccess(savingId, currentUserId) {
   const saving = savings && savings[0];
 
   if (!saving) {
+    return { saving: null, status: 404, error: 'Poupança não encontrada' };
+  }
+
+  // Se a poupança é privada, apenas utilizadores com admin_private têm acesso
+  if (saving.is_private === 1 && currentUserRole !== 'admin_private') {
     return { saving: null, status: 404, error: 'Poupança não encontrada' };
   }
 
@@ -230,16 +242,19 @@ router.get('/', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Sem permissão para aceder a estas poupanças' });
     }
 
+    const canSeePrivate = req.user?.role === 'admin_private';
+    const privateFilter = canSeePrivate ? '' : ' AND (s.is_private = 0 OR s.is_private IS NULL)';
+
     const sql = isPostgres
       ? `SELECT s.*, 
                 (SELECT COUNT(*) FROM saving_transactions st WHERE st.saving_id = s.id) as transactions_count
          FROM savings s 
-         WHERE s.user_id = $1 
+         WHERE s.user_id = $1 ${privateFilter}
          ORDER BY s.id ASC`
       : `SELECT s.*, 
                 (SELECT COUNT(*) FROM saving_transactions st WHERE st.saving_id = s.id) as transactions_count
          FROM savings s 
-         WHERE s.user_id = ? 
+         WHERE s.user_id = ? ${privateFilter}
          ORDER BY s.id ASC`;
 
     const result = await query(sql, [access.userId]);
@@ -263,6 +278,8 @@ router.post('/', authenticateToken, async (req, res) => {
       reminder_date_enabled,
       reminder_days_before,
       reminder_target_reached_enabled,
+      is_private,
+      isPrivate,
       userId
     } = req.body;
 
@@ -274,6 +291,10 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'O nome da poupança é obrigatório' });
     }
+
+    const canPrivate = req.user?.role === 'admin_private';
+    const rawIsPrivate = is_private !== undefined ? is_private : isPrivate;
+    const finalIsPrivate = (canPrivate && (rawIsPrivate === true || rawIsPrivate === 1 || rawIsPrivate === '1' || rawIsPrivate === 'true')) ? 1 : 0;
 
     const targetVal = target_amount_cents !== undefined && target_amount_cents !== null && target_amount_cents !== ''
       ? Math.max(0, parseInt(target_amount_cents, 10))
@@ -293,20 +314,20 @@ router.post('/', authenticateToken, async (req, res) => {
       ? `INSERT INTO savings (
            user_id, name, target_amount_cents, current_amount_cents,
            target_date, reminder_date_enabled, reminder_days_before,
-           reminder_target_reached_enabled, target_reached_notified
+           reminder_target_reached_enabled, target_reached_notified, is_private
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`
       : `INSERT INTO savings (
            user_id, name, target_amount_cents, current_amount_cents,
            target_date, reminder_date_enabled, reminder_days_before,
-           reminder_target_reached_enabled, target_reached_notified
+           reminder_target_reached_enabled, target_reached_notified, is_private
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     const insertRes = await query(insertSql, [
       access.userId, name.trim(), targetVal, initialVal,
       cleanTargetDate, cleanReminderDate, cleanReminderDays,
-      cleanReminderTarget, targetNotified
+      cleanReminderTarget, targetNotified, finalIsPrivate
     ]);
 
     let newSaving;
@@ -355,12 +376,12 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Atualizar poupança (Nome, Meta, Data Limite, Lembretes)
+// Atualizar poupança (Nome, Meta, Data Limite, Lembretes, Privado)
 router.put('/:id', authenticateToken, async (req, res) => {
   await ensureTables();
   try {
     const { id } = req.params;
-    const access = await getSavingAndCheckAccess(id, req.user.id);
+    const access = await getSavingAndCheckAccess(id, req.user);
     if (!access.saving) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -374,11 +395,23 @@ router.put('/:id', authenticateToken, async (req, res) => {
       target_date,
       reminder_date_enabled,
       reminder_days_before,
-      reminder_target_reached_enabled
+      reminder_target_reached_enabled,
+      is_private,
+      isPrivate
     } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'O nome da poupança é obrigatório' });
+    }
+
+    const prevSaving = access.saving;
+    const canPrivate = req.user?.role === 'admin_private';
+    let targetIsPrivate = prevSaving.is_private || 0;
+    if (canPrivate) {
+      const rawIsPrivate = is_private !== undefined ? is_private : isPrivate;
+      if (rawIsPrivate !== undefined) {
+        targetIsPrivate = (rawIsPrivate === true || rawIsPrivate === 1 || rawIsPrivate === '1' || rawIsPrivate === 'true') ? 1 : 0;
+      }
     }
 
     const targetVal = target_amount_cents !== undefined && target_amount_cents !== null && target_amount_cents !== ''
@@ -390,7 +423,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const cleanReminderDays = parseInt(reminder_days_before, 10) || 7;
     const cleanReminderTarget = (reminder_target_reached_enabled === 0 || reminder_target_reached_enabled === false || reminder_target_reached_enabled === '0') ? 0 : 1;
 
-    const prevSaving = access.saving;
     let targetNotified = prevSaving.target_reached_notified || 0;
     const currentAmount = prevSaving.current_amount_cents || 0;
 
@@ -409,12 +441,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
          SET name = $1, target_amount_cents = $2, target_date = $3,
              reminder_date_enabled = $4, reminder_days_before = $5,
              reminder_target_reached_enabled = $6, target_reached_notified = $7,
+             is_private = $8,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $8 RETURNING *`
+         WHERE id = $9 RETURNING *`
       : `UPDATE savings 
          SET name = ?, target_amount_cents = ?, target_date = ?,
              reminder_date_enabled = ?, reminder_days_before = ?,
              reminder_target_reached_enabled = ?, target_reached_notified = ?,
+             is_private = ?,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`;
 
@@ -422,6 +456,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       name.trim(), targetVal, cleanTargetDate,
       cleanReminderDate, cleanReminderDays,
       cleanReminderTarget, targetNotified,
+      targetIsPrivate,
       id
     ]);
     const updated = isPostgres ? updateRes.rows[0] : null;
@@ -451,7 +486,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       target_date: cleanTargetDate,
       reminder_date_enabled: cleanReminderDate,
       reminder_days_before: cleanReminderDays,
-      reminder_target_reached_enabled: cleanReminderTarget
+      reminder_target_reached_enabled: cleanReminderTarget,
+      is_private: targetIsPrivate
     });
   } catch (err) {
     console.error('Erro ao atualizar poupança:', err);
@@ -464,7 +500,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   await ensureTables();
   try {
     const { id } = req.params;
-    const access = await getSavingAndCheckAccess(id, req.user.id);
+    const access = await getSavingAndCheckAccess(id, req.user);
     if (!access.saving) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -489,7 +525,7 @@ router.get('/:id/transactions', authenticateToken, async (req, res) => {
   await ensureTables();
   try {
     const { id } = req.params;
-    const access = await getSavingAndCheckAccess(id, req.user.id);
+    const access = await getSavingAndCheckAccess(id, req.user);
     if (!access.saving) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -519,7 +555,7 @@ router.post('/:id/transactions', authenticateToken, async (req, res) => {
   await ensureTables();
   try {
     const { id } = req.params;
-    const access = await getSavingAndCheckAccess(id, req.user.id);
+    const access = await getSavingAndCheckAccess(id, req.user);
     if (!access.saving) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -632,7 +668,7 @@ router.delete('/transactions/:txId', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Movimento não encontrado' });
     }
 
-    const access = await getSavingAndCheckAccess(tx.saving_id, req.user.id);
+    const access = await getSavingAndCheckAccess(tx.saving_id, req.user);
     if (!access.saving) {
       return res.status(access.status).json({ error: access.error });
     }

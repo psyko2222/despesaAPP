@@ -208,6 +208,7 @@ export const savingsAPI = {
     reminder_date_enabled?: number;
     reminder_days_before?: number;
     reminder_target_reached_enabled?: number;
+    is_private?: number;
     userId?: number;
   }) =>
     api.post<Saving>('/savings', data),
@@ -219,6 +220,7 @@ export const savingsAPI = {
     reminder_date_enabled?: number;
     reminder_days_before?: number;
     reminder_target_reached_enabled?: number;
+    is_private?: number;
   }) =>
     api.put<Saving>(`/savings/${id}`, data),
 

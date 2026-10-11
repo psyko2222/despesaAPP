@@ -36,7 +36,7 @@ async function initializeDatabase() {
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         status VARCHAR(50) DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
-        role VARCHAR(50) DEFAULT 'user' CHECK(role IN ('user', 'admin')),
+        role VARCHAR(50) DEFAULT 'user' CHECK(role IN ('user', 'admin', 'admin_private')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_login TIMESTAMP
       );
@@ -54,6 +54,7 @@ async function initializeDatabase() {
         original_day INTEGER NOT NULL,
         active_series INTEGER NOT NULL DEFAULT 1,
         recurrence_months INTEGER NOT NULL DEFAULT 1,
+        is_private INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -174,6 +175,7 @@ async function initializeDatabase() {
         reminder_days_before INTEGER DEFAULT 7,
         reminder_target_reached_enabled INTEGER DEFAULT 1,
         target_reached_notified INTEGER DEFAULT 0,
+        is_private INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -206,6 +208,12 @@ async function initializeDatabase() {
       ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_days_before INTEGER DEFAULT 7;
       ALTER TABLE savings ADD COLUMN IF NOT EXISTS reminder_target_reached_enabled INTEGER DEFAULT 1;
       ALTER TABLE savings ADD COLUMN IF NOT EXISTS target_reached_notified INTEGER DEFAULT 0;
+
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+      ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('user', 'admin', 'admin_private'));
+      ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_private INTEGER DEFAULT 0;
+      ALTER TABLE savings ADD COLUMN IF NOT EXISTS is_private INTEGER DEFAULT 0;
+      UPDATE users SET role = 'admin_private' WHERE LOWER(email) = 'luiszambujo@hotmail.com';
     `);
 
     await client.query('COMMIT');

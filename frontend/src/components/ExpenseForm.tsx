@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { expensesAPI } from '@/lib/api';
 import { Expense } from '@/types';
+import { useAuth } from '@/hooks/useAuth';
 import { formatDate, centsToInput, parseCents, recurrenceLabel, normalizedRecurrenceMonths } from '@/lib/utils';
 
 interface ExpenseFormProps {
@@ -16,6 +18,8 @@ interface ExpenseFormProps {
 }
 
 export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: ExpenseFormProps) {
+  const { user } = useAuth();
+  const canPrivate = user?.role === 'admin_private';
   const [description, setDescription] = useState(initialExpense?.description || '');
   const [amount, setAmount] = useState(initialExpense ? centsToInput(initialExpense.amount_cents) : '');
   const [debitDate, setDebitDate] = useState(initialExpense?.debit_date || new Date().toISOString().split('T')[0]);
@@ -23,6 +27,7 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
   const [recurring, setRecurring] = useState(initialExpense?.recurring === 1);
   const [fixedAmount, setFixedAmount] = useState(initialExpense?.fixed_amount === 1);
   const [recurrenceMonths, setRecurrenceMonths] = useState(initialExpense?.recurrence_months || 1);
+  const [isPrivate, setIsPrivate] = useState(initialExpense ? initialExpense.is_private === 1 : false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -59,6 +64,7 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
         fixed_amount: fixedAmount ? 1 : 0,
         original_day: new Date(debitDate).getDate(),
         recurrence_months: recurring ? recurrenceMonths : 1,
+        is_private: canPrivate && isPrivate ? 1 : 0,
       };
 
       console.log('=== DEBUG: Sending expense data ===', { 
@@ -196,6 +202,22 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
                   </label>
                 </div>
               </>
+            )}
+
+            {canPrivate && (
+              <div className="flex items-center space-x-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                <input
+                  type="checkbox"
+                  id="isPrivate"
+                  checked={isPrivate}
+                  onChange={(e) => setIsPrivate(e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                />
+                <label htmlFor="isPrivate" className="text-sm font-medium text-amber-800 dark:text-amber-300 cursor-pointer flex items-center gap-1.5">
+                  <Lock className="w-4 h-4" />
+                  Registo Privado (visível apenas para mim)
+                </label>
+              </div>
             )}
 
             {error && (

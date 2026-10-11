@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { Home, Repeat, BarChart3, Settings, Users, Plus, Trash2, Edit, CheckCircle2, Circle, Search, Calendar, AlertTriangle, X, ChevronDown, FileDown, Bell, PiggyBank } from 'lucide-react';
+import { Home, Repeat, BarChart3, Settings, Users, Plus, Trash2, Edit, CheckCircle2, Circle, Search, Calendar, AlertTriangle, X, ChevronDown, FileDown, Bell, PiggyBank, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ExpenseForm } from '@/components/ExpenseForm';
@@ -365,7 +365,7 @@ export default function HomePage() {
     { id: 'stats' as Tab, label: 'Estatísticas', icon: BarChart3 },
     { id: 'savings' as Tab, label: 'Poupanças', icon: PiggyBank },
     { id: 'settings' as Tab, label: 'Definições', icon: Settings },
-    ...(user?.role === 'admin' ? [{ id: 'admin' as Tab, label: 'Admin', icon: Settings }] : []),
+    ...((user?.role === 'admin' || user?.role === 'admin_private') ? [{ id: 'admin' as Tab, label: 'Admin', icon: Settings }] : []),
   ];
 
   return (
@@ -805,6 +805,12 @@ export default function HomePage() {
                                 {recurrenceLabel(expense.recurrence_months)}
                               </span>
                             )}
+                            {expense.is_private === 1 && (
+                              <span className="inline-flex items-center gap-1 mt-1 ml-1.5 text-[11px] bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 px-2 py-0.5 rounded font-medium">
+                                <Lock className="w-3 h-3 text-amber-600" />
+                                Privado
+                              </span>
+                            )}
                           </div>
 
                           <div className="text-right flex-shrink-0">
@@ -897,6 +903,12 @@ export default function HomePage() {
                             <span className="inline-block mt-1 text-[11px] bg-primary-100 dark:bg-primary-950/70 text-primary-700 dark:text-primary-300 px-2 py-0.5 rounded font-medium">
                               {recurrenceLabel(expense.recurrence_months)}
                             </span>
+                            {expense.is_private === 1 && (
+                              <span className="inline-flex items-center gap-1 mt-1 ml-1.5 text-[11px] bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 px-2 py-0.5 rounded font-medium">
+                                <Lock className="w-3 h-3 text-amber-600" />
+                                Privado
+                              </span>
+                            )}
                           </div>
                           <div className="text-right ml-2 sm:ml-4">
                             <p className="font-bold text-base sm:text-lg text-gray-900 dark:text-gray-100">
@@ -989,6 +1001,12 @@ export default function HomePage() {
                     <p><strong>Periodicidade:</strong> {recurrenceLabel(selectedExpense.recurrence_months)}</p>
                   </>
                 )}
+                {selectedExpense.is_private === 1 && (
+                  <p className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 p-2 rounded-lg text-xs">
+                    <Lock className="w-4 h-4 text-amber-600" />
+                    Registo Privado (visível apenas para si)
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Button
@@ -1070,7 +1088,7 @@ export default function HomePage() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         pendingInvitations={pendingInvitations}
-        isAdmin={user?.role === 'admin'}
+        isAdmin={user?.role === 'admin' || user?.role === 'admin_private'}
       />
 
       {/* Modal de Instruções de Instalação (PWA) */}

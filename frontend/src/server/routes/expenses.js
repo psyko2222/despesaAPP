@@ -9,10 +9,12 @@ router.get('/month/:month', authenticateToken, checkDataAccess, async (req, res)
     const { month } = req.params;
     const userId = req.dataUserId;
     const period = financialPeriod(month);
+    const canSeePrivate = req.user?.role === 'admin_private';
+    const privateFilter = canSeePrivate ? '' : ' AND (is_private = 0 OR is_private IS NULL)';
 
     const sql = isPostgres
-      ? 'SELECT * FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3 ORDER BY debit_date, description'
-      : 'SELECT * FROM expenses WHERE user_id = ? AND debit_date BETWEEN ? AND ? ORDER BY debit_date, description';
+      ? `SELECT * FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3${privateFilter} ORDER BY debit_date, description`
+      : `SELECT * FROM expenses WHERE user_id = ? AND debit_date BETWEEN ? AND ?${privateFilter} ORDER BY debit_date, description`;
     const params = [userId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]];
     
     const expenses = await query(sql, params);
@@ -29,11 +31,13 @@ router.get('/recurring', authenticateToken, checkDataAccess, async (req, res) =>
     const userId = req.dataUserId;
     const currentMonth = currentFinancialPeriodMonth();
     const period = financialPeriod(currentMonth);
+    const canSeePrivate = req.user?.role === 'admin_private';
+    const privateFilter = canSeePrivate ? '' : ' AND (is_private = 0 OR is_private IS NULL)';
 
     // Get all recurring expenses within the current financial period (21-20)
     const sql = isPostgres
-      ? 'SELECT * FROM expenses WHERE user_id = $1 AND recurring = 1 AND debit_date BETWEEN $2 AND $3 ORDER BY debit_date ASC'
-      : 'SELECT * FROM expenses WHERE user_id = ? AND recurring = 1 AND debit_date BETWEEN ? AND ? ORDER BY debit_date ASC';
+      ? `SELECT * FROM expenses WHERE user_id = $1 AND recurring = 1 AND debit_date BETWEEN $2 AND $3${privateFilter} ORDER BY debit_date ASC`
+      : `SELECT * FROM expenses WHERE user_id = ? AND recurring = 1 AND debit_date BETWEEN ? AND ?${privateFilter} ORDER BY debit_date ASC`;
     const params = [userId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]];
     
     const expenses = await query(sql, params);
@@ -73,10 +77,12 @@ router.get('/upcoming', authenticateToken, checkDataAccess, async (req, res) => 
   try {
     const userId = req.dataUserId;
     const today = new Date().toISOString().split('T')[0];
+    const canSeePrivate = req.user?.role === 'admin_private';
+    const privateFilter = canSeePrivate ? '' : ' AND (is_private = 0 OR is_private IS NULL)';
 
     const sql = isPostgres
-      ? 'SELECT * FROM expenses WHERE user_id = $1 AND debit_date >= $2 ORDER BY debit_date, description'
-      : 'SELECT * FROM expenses WHERE user_id = ? AND debit_date >= ? ORDER BY debit_date, description';
+      ? `SELECT * FROM expenses WHERE user_id = $1 AND debit_date >= $2${privateFilter} ORDER BY debit_date, description`
+      : `SELECT * FROM expenses WHERE user_id = ? AND debit_date >= ?${privateFilter} ORDER BY debit_date, description`;
     const params = [userId, today];
     
     const expenses = await query(sql, params);
@@ -94,25 +100,27 @@ router.get('/statistics/summary', authenticateToken, checkDataAccess, async (req
     const targetMonth = req.query.month || currentFinancialPeriodMonth();
     const windowMonths = Math.max(1, Math.min(12, parseInt(req.query.windowMonths) || 3));
     const [year, monthNum] = targetMonth.split('-').map(Number);
+    const canSeePrivate = req.user?.role === 'admin_private';
+    const privateFilter = canSeePrivate ? '' : ' AND (is_private = 0 OR is_private IS NULL)';
 
     const currentPeriod = financialPeriod(targetMonth);
     const currentStart = currentPeriod.start.toISOString().split('T')[0];
     const currentEnd = currentPeriod.end.toISOString().split('T')[0];
 
     const sumSql = isPostgres
-      ? 'SELECT COALESCE(SUM(amount_cents), 0) AS total FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3'
-      : 'SELECT COALESCE(SUM(amount_cents), 0) AS total FROM expenses WHERE user_id = ? AND debit_date BETWEEN ? AND ?';
+      ? `SELECT COALESCE(SUM(amount_cents), 0) AS total FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3${privateFilter}`
+      : `SELECT COALESCE(SUM(amount_cents), 0) AS total FROM expenses WHERE user_id = ? AND debit_date BETWEEN ? AND ?${privateFilter}`;
 
     // 1. Current month expenses
     const currExpensesSql = isPostgres
-      ? 'SELECT * FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3 ORDER BY debit_date, description'
-      : 'SELECT * FROM expenses WHERE user_id = ? AND debit_date BETWEEN ? AND ? ORDER BY debit_date, description';
+      ? `SELECT * FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3${privateFilter} ORDER BY debit_date, description`
+      : `SELECT * FROM expenses WHERE user_id = ? AND debit_date BETWEEN ? AND ?${privateFilter} ORDER BY debit_date, description`;
     const currExpensesPromise = query(currExpensesSql, [userId, currentStart, currentEnd]);
 
     // 2. Recurring expenses for current financial period
     const recurringSql = isPostgres
-      ? 'SELECT * FROM expenses WHERE user_id = $1 AND recurring = 1 AND debit_date BETWEEN $2 AND $3 ORDER BY debit_date ASC'
-      : 'SELECT * FROM expenses WHERE user_id = ? AND recurring = 1 AND debit_date BETWEEN ? AND ? ORDER BY debit_date ASC';
+      ? `SELECT * FROM expenses WHERE user_id = $1 AND recurring = 1 AND debit_date BETWEEN $2 AND $3${privateFilter} ORDER BY debit_date ASC`
+      : `SELECT * FROM expenses WHERE user_id = ? AND recurring = 1 AND debit_date BETWEEN ? AND ?${privateFilter} ORDER BY debit_date ASC`;
     const recurringPromise = query(recurringSql, [userId, currentStart, currentEnd]);
 
     // 3. Current year total (from month 1 to current month)
@@ -207,8 +215,8 @@ router.get('/statistics/summary', authenticateToken, checkDataAccess, async (req
         ? seriesIds.map((_, i) => `$${i + 2}`).join(',')
         : seriesIds.map(() => '?').join(',');
       const seriesSql = isPostgres
-        ? `SELECT * FROM expenses WHERE user_id = $1 AND (series_id IN (${placeholders}) OR id IN (${placeholders})) ORDER BY debit_date`
-        : `SELECT * FROM expenses WHERE user_id = ? AND (series_id IN (${placeholders}) OR id IN (${placeholders})) ORDER BY debit_date`;
+        ? `SELECT * FROM expenses WHERE user_id = $1 AND (series_id IN (${placeholders}) OR id IN (${placeholders}))${privateFilter} ORDER BY debit_date`
+        : `SELECT * FROM expenses WHERE user_id = ? AND (series_id IN (${placeholders}) OR id IN (${placeholders}))${privateFilter} ORDER BY debit_date`;
       const seriesResult = await query(seriesSql, [userId, ...seriesIds]);
       const seriesRows = isPostgres ? seriesResult.rows : seriesResult;
 
@@ -248,10 +256,12 @@ router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
+    const canSeePrivate = req.user?.role === 'admin_private';
+    const privateFilter = canSeePrivate ? '' : ' AND (is_private = 0 OR is_private IS NULL)';
 
     const sql = isPostgres
-      ? 'SELECT * FROM expenses WHERE id = $1 AND user_id = $2'
-      : 'SELECT * FROM expenses WHERE id = ? AND user_id = ?';
+      ? `SELECT * FROM expenses WHERE id = $1 AND user_id = $2${privateFilter}`
+      : `SELECT * FROM expenses WHERE id = ? AND user_id = ?${privateFilter}`;
     const params = [id, userId];
     
     const expense = await queryOne(sql, params);
@@ -272,10 +282,12 @@ router.get('/series/:seriesId', authenticateToken, checkDataAccess, async (req, 
   try {
     const { seriesId } = req.params;
     const userId = req.dataUserId;
+    const canSeePrivate = req.user?.role === 'admin_private';
+    const privateFilter = canSeePrivate ? '' : ' AND (is_private = 0 OR is_private IS NULL)';
 
     const sql = isPostgres
-      ? 'SELECT * FROM expenses WHERE series_id = $1 AND user_id = $2 ORDER BY debit_date'
-      : 'SELECT * FROM expenses WHERE series_id = ? AND user_id = ? ORDER BY debit_date';
+      ? `SELECT * FROM expenses WHERE series_id = $1 AND user_id = $2${privateFilter} ORDER BY debit_date`
+      : `SELECT * FROM expenses WHERE series_id = ? AND user_id = ?${privateFilter} ORDER BY debit_date`;
     const params = [seriesId, userId];
     
     const expenses = await query(sql, params);
@@ -303,12 +315,19 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
       originalDay,
       original_day,
       recurrenceMonths,
-      recurrence_months
+      recurrence_months,
+      is_private,
+      isPrivate
     } = req.body;
 
     // Handle both naming conventions (camelCase and snake_case)
     const finalAmountCents = amountCents !== undefined ? amountCents : amount_cents;
     const finalDebitDate = debitDate !== undefined ? debitDate : debit_date;
+
+    // Avalia se utilizador tem permissão de privado
+    const canPrivate = req.user?.role === 'admin_private';
+    const rawIsPrivate = is_private !== undefined ? is_private : isPrivate;
+    const finalIsPrivate = (canPrivate && (rawIsPrivate === true || rawIsPrivate === 1 || rawIsPrivate === '1' || rawIsPrivate === 'true')) ? 1 : 0;
 
     // Avalia corretamente se 'fixedAmount' ou 'fixed_amount' é explicitamente verdadeiro (booleano, 1 ou string "true")
     const rawFixedAmount = fixedAmount !== undefined ? fixedAmount : fixed_amount;
@@ -328,12 +347,13 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
       recurrence_months: finalRecurrenceMonths,
       normalizedMonths: normalizedMonths,
       recurring: recurring,
+      is_private: finalIsPrivate,
       timestamp: new Date().toISOString()
     });
 
     const insertSql = isPostgres
-      ? 'INSERT INTO expenses (user_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id'
-      : 'INSERT INTO expenses (user_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+      ? 'INSERT INTO expenses (user_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months, is_private) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id'
+      : 'INSERT INTO expenses (user_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
     const insertParams = [
       userId,
       description,
@@ -343,7 +363,8 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
       recurring ? 1 : 0,
       finalFixedAmount ? 1 : 0,
       day,
-      normalizedMonths
+      normalizedMonths,
+      finalIsPrivate
     ];
     
     const result = await run(insertSql, insertParams);
@@ -385,8 +406,8 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
           const amountCents = finalFixedAmount ? finalAmountCents : 0;
 
           const occurrenceSql = isPostgres
-            ? 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)'
-            : 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            ? 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months, is_private) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)'
+            : 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
           const occurrenceParams = [
             userId,
             expenseId,
@@ -397,7 +418,8 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
             1,
             finalFixedAmount ? 1 : 0,
             day,
-            normalizedMonths
+            normalizedMonths,
+            finalIsPrivate
           ];
           await run(occurrenceSql, occurrenceParams);
         }
@@ -435,7 +457,9 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, async
       originalDay,
       original_day,
       recurrenceMonths,
-      recurrence_months
+      recurrence_months,
+      is_private,
+      isPrivate
     } = req.body;
 
     // Handle both naming conventions (camelCase and snake_case)
@@ -452,6 +476,20 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, async
     const existing = await queryOne(existingSql, [id, userId]);
     if (!existing) {
       return res.status(404).json({ error: 'Expense not found' });
+    }
+
+    const canSeePrivate = req.user?.role === 'admin_private';
+    if (existing.is_private === 1 && !canSeePrivate) {
+      return res.status(404).json({ error: 'Expense not found' });
+    }
+
+    // Determine target is_private
+    let targetIsPrivate = existing.is_private || 0;
+    if (canSeePrivate) {
+      const rawIsPrivate = is_private !== undefined ? is_private : isPrivate;
+      if (rawIsPrivate !== undefined) {
+        targetIsPrivate = (rawIsPrivate === true || rawIsPrivate === 1 || rawIsPrivate === '1' || rawIsPrivate === 'true') ? 1 : 0;
+      }
     }
 
     // Validate required fields
@@ -478,8 +516,8 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, async
 
       // Update this specific occurrence
       const updateSql = isPostgres
-        ? 'UPDATE expenses SET description = $1, amount_cents = $2, debit_date = $3, paid = $4, recurring = $5, fixed_amount = $6, original_day = $7, recurrence_months = $8, updated_at = CURRENT_TIMESTAMP WHERE id = $9 AND user_id = $10'
-        : 'UPDATE expenses SET description = ?, amount_cents = ?, debit_date = ?, paid = ?, recurring = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?';
+        ? 'UPDATE expenses SET description = $1, amount_cents = $2, debit_date = $3, paid = $4, recurring = $5, fixed_amount = $6, original_day = $7, recurrence_months = $8, is_private = $9, updated_at = CURRENT_TIMESTAMP WHERE id = $10 AND user_id = $11'
+        : 'UPDATE expenses SET description = ?, amount_cents = ?, debit_date = ?, paid = ?, recurring = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, is_private = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?';
       await run(updateSql, [
         description,
         Math.round(finalAmount),
@@ -489,36 +527,37 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, async
         isFixed ? 1 : 0,
         day,
         normalizedMonths,
+        targetIsPrivate,
         id,
         userId
       ]);
 
       // Update future occurrences (not past ones)
-      // REGRA: Se o valor for fixo ("valor sempre igual" ativado), o novo valor copia-se para os meses seguintes.
-      // Se "valor sempre igual" estiver desativado, o valor é variável para cada mês e NÃO deve sobrescrever os meses seguintes!
       if (isFixed) {
         const updateFutureSql = isPostgres
-          ? 'UPDATE expenses SET description = $1, amount_cents = $2, fixed_amount = $3, original_day = $4, recurrence_months = $5, updated_at = CURRENT_TIMESTAMP WHERE series_id = $6 AND user_id = $7 AND debit_date > $8'
-          : 'UPDATE expenses SET description = ?, amount_cents = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, updated_at = CURRENT_TIMESTAMP WHERE series_id = ? AND user_id = ? AND debit_date > ?';
+          ? 'UPDATE expenses SET description = $1, amount_cents = $2, fixed_amount = $3, original_day = $4, recurrence_months = $5, is_private = $6, updated_at = CURRENT_TIMESTAMP WHERE series_id = $7 AND user_id = $8 AND debit_date > $9'
+          : 'UPDATE expenses SET description = ?, amount_cents = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, is_private = ?, updated_at = CURRENT_TIMESTAMP WHERE series_id = ? AND user_id = ? AND debit_date > ?';
         await run(updateFutureSql, [
           description,
           Math.round(finalAmount),
           1,
           day,
           normalizedMonths,
+          targetIsPrivate,
           existing.series_id,
           userId,
           existing.debit_date
         ]);
       } else {
         const updateFutureSql = isPostgres
-          ? 'UPDATE expenses SET description = $1, fixed_amount = $2, original_day = $3, recurrence_months = $4, updated_at = CURRENT_TIMESTAMP WHERE series_id = $5 AND user_id = $6 AND debit_date > $7'
-          : 'UPDATE expenses SET description = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, updated_at = CURRENT_TIMESTAMP WHERE series_id = ? AND user_id = ? AND debit_date > ?';
+          ? 'UPDATE expenses SET description = $1, fixed_amount = $2, original_day = $3, recurrence_months = $4, is_private = $5, updated_at = CURRENT_TIMESTAMP WHERE series_id = $6 AND user_id = $7 AND debit_date > $8'
+          : 'UPDATE expenses SET description = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, is_private = ?, updated_at = CURRENT_TIMESTAMP WHERE series_id = ? AND user_id = ? AND debit_date > ?';
         await run(updateFutureSql, [
           description,
           0,
           day,
           normalizedMonths,
+          targetIsPrivate,
           existing.series_id,
           userId,
           existing.debit_date
@@ -530,8 +569,8 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, async
 
       // Non-recurring expense, just update this one
       const updateSql = isPostgres
-        ? 'UPDATE expenses SET description = $1, amount_cents = $2, debit_date = $3, paid = $4, recurring = $5, fixed_amount = $6, original_day = $7, recurrence_months = $8, updated_at = CURRENT_TIMESTAMP WHERE id = $9 AND user_id = $10'
-        : 'UPDATE expenses SET description = ?, amount_cents = ?, debit_date = ?, paid = ?, recurring = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?';
+        ? 'UPDATE expenses SET description = $1, amount_cents = $2, debit_date = $3, paid = $4, recurring = $5, fixed_amount = $6, original_day = $7, recurrence_months = $8, is_private = $9, updated_at = CURRENT_TIMESTAMP WHERE id = $10 AND user_id = $11'
+        : 'UPDATE expenses SET description = ?, amount_cents = ?, debit_date = ?, paid = ?, recurring = ?, fixed_amount = ?, original_day = ?, recurrence_months = ?, is_private = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?';
       await run(updateSql, [
         description,
         Math.round(finalAmount),
@@ -541,6 +580,7 @@ router.put('/:id', authenticateToken, checkDataAccess, requireWriteAccess, async
         isFixed ? 1 : 0,
         day,
         normalizedMonths,
+        targetIsPrivate,
         id,
         userId
       ]);
@@ -563,6 +603,14 @@ router.patch('/:id/paid', authenticateToken, checkDataAccess, requireWriteAccess
     const { id } = req.params;
     const userId = req.dataUserId;
     const { paid } = req.body;
+
+    const checkSql = isPostgres
+      ? 'SELECT * FROM expenses WHERE id = $1 AND user_id = $2'
+      : 'SELECT * FROM expenses WHERE id = ? AND user_id = ?';
+    const existing = await queryOne(checkSql, [id, userId]);
+    if (!existing || (existing.is_private === 1 && req.user?.role !== 'admin_private')) {
+      return res.status(404).json({ error: 'Expense not found' });
+    }
 
     const updateSql = isPostgres
       ? 'UPDATE expenses SET paid = $1 WHERE id = $2 AND user_id = $3'
@@ -591,7 +639,7 @@ router.delete('/:id', authenticateToken, checkDataAccess, requireDeleteAccess, a
       ? 'SELECT * FROM expenses WHERE id = $1 AND user_id = $2'
       : 'SELECT * FROM expenses WHERE id = ? AND user_id = ?';
     const expense = await queryOne(expenseSql, [id, userId]);
-    if (!expense) {
+    if (!expense || (expense.is_private === 1 && req.user?.role !== 'admin_private')) {
       return res.status(404).json({ error: 'Expense not found' });
     }
 
@@ -710,8 +758,8 @@ router.post('/ensure-future', authenticateToken, async (req, res) => {
           const amountCents = latest.fixed_amount ? latest.amount_cents : 0;
 
           const insertSql = isPostgres
-            ? 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)'
-            : 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            ? 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months, is_private) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)'
+            : 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, recurrence_months, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
           await run(insertSql, [
             userId,
             seriesId,
@@ -722,7 +770,8 @@ router.post('/ensure-future', authenticateToken, async (req, res) => {
             1,
             latest.fixed_amount ? 1 : 0,
             latest.original_day,
-            latest.recurrence_months
+            latest.recurrence_months,
+            latest.is_private ? 1 : 0
           ]);
         }
 

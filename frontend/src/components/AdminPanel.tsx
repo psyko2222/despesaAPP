@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Lock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -70,8 +71,11 @@ export function AdminPanel() {
   const [logFilter, setLogFilter] = useState<'all' | 'error' | 'warning' | 'info'>('all');
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
 
+  const isAdmin = user?.role === 'admin' || user?.role === 'admin_private';
+  const isViewerPrivateAdmin = user?.role === 'admin_private';
+
   useEffect(() => {
-    if (user?.role === 'admin') {
+    if (isAdmin) {
       loadPendingUsers();
       loadAllUsers();
       if (activeTab === 'logs') {
@@ -84,7 +88,7 @@ export function AdminPanel() {
         loadPasswordResetRequests();
       }
     }
-  }, [user, activeTab, logFilter]);
+  }, [user, isAdmin, activeTab, logFilter]);
 
   const loadPendingUsers = async () => {
     setLoading(true);
@@ -273,6 +277,22 @@ export function AdminPanel() {
     }
   };
 
+  const handleChangeRole = async (userId: number, newRole: string, confirmMessage: string) => {
+    if (!confirm(confirmMessage)) return;
+
+    setActionLoading(userId);
+    try {
+      await api.post(`/admin/users/${userId}/role`, { role: newRole });
+      alert('Função do utilizador alterada com sucesso!');
+      loadAllUsers();
+    } catch (error: any) {
+      console.error('Failed to change user role:', error);
+      alert(error.response?.data?.error || 'Erro ao alterar função do utilizador');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const getLevelColor = (level: string) => {
     switch (level) {
       case 'error': return 'bg-red-100 text-red-800 border-red-300';
@@ -286,7 +306,7 @@ export function AdminPanel() {
     return new Date(dateString).toLocaleString('pt-PT');
   };
 
-  if (user?.role !== 'admin') {
+  if (!isAdmin) {
     return (
       <Card>
         <CardContent className="py-8">
@@ -450,70 +470,158 @@ export function AdminPanel() {
                 {allUsers.map((allUser) => (
                   <div
                     key={allUser.id}
-                    className={`flex items-center justify-between p-3 rounded-lg ${
-                      allUser.role === 'admin' ? 'bg-purple-50 border-purple-200' : 'bg-gray-50'
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl gap-3 ${
+                      allUser.role === 'admin_private'
+                        ? 'bg-indigo-50/70 border border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800'
+                        : allUser.role === 'admin'
+                        ? 'bg-purple-50/70 border border-purple-200 dark:bg-purple-950/30 dark:border-purple-800'
+                        : 'bg-gray-50 border border-gray-200 dark:bg-gray-800/60 dark:border-gray-700'
                     }`}
                   >
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2">
-                        <p className="font-medium">{allUser.email}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                        <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{allUser.email}</p>
+                        {allUser.role === 'admin_private' && (
+                          <span className="text-[11px] bg-indigo-100 text-indigo-800 dark:bg-indigo-950/70 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border border-indigo-300 dark:border-indigo-700">
+                            <Lock className="w-3 h-3 text-indigo-600" />
+                            Admin Privado
+                          </span>
+                        )}
                         {allUser.role === 'admin' && (
-                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                          <span className="text-[11px] bg-purple-100 text-purple-700 dark:bg-purple-950/70 dark:text-purple-300 font-semibold px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800">
                             Admin
                           </span>
                         )}
                         {allUser.status === 'pending' && (
-                          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">
+                          <span className="text-[11px] bg-yellow-100 text-yellow-700 dark:bg-yellow-950/70 dark:text-yellow-300 px-2 py-0.5 rounded-full border border-yellow-200">
                             Pendente
                           </span>
                         )}
                         {allUser.status === 'rejected' && (
-                          <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
+                          <span className="text-[11px] bg-red-100 text-red-700 dark:bg-red-950/70 dark:text-red-300 px-2 py-0.5 rounded-full border border-red-200">
                             Rejeitado
                           </span>
                         )}
                         {allUser.has_pending_reset && (
-                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded flex items-center">
+                          <span className="text-[11px] bg-orange-100 text-orange-700 dark:bg-orange-950/70 dark:text-orange-300 px-2 py-0.5 rounded-full flex items-center gap-1 border border-orange-200">
                             🔑 Reset Pendente
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
                         Registado em: {new Date(allUser.created_at).toLocaleDateString('pt-PT')}
                       </p>
                       {allUser.last_login && (
-                        <p className="text-sm text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           Último login: {new Date(allUser.last_login).toLocaleDateString('pt-PT')}
                         </p>
                       )}
                     </div>
-                    <div className="flex space-x-2">
-                      {allUser.role !== 'admin' && allUser.status === 'approved' && (
-                        <Button
-                          onClick={() => handlePromote(allUser.id)}
-                          disabled={actionLoading === allUser.id}
-                          size="sm"
-                          className="bg-purple-600 hover:bg-purple-700"
-                        >
-                          {actionLoading === allUser.id ? '...' : 'Promover'}
-                        </Button>
+
+                    <div className="flex flex-wrap gap-1.5 items-center justify-end flex-shrink-0">
+                      {isViewerPrivateAdmin ? (
+                        <>
+                          {allUser.role === 'user' && allUser.status === 'approved' && (
+                            <>
+                              <Button
+                                onClick={() => handleChangeRole(allUser.id, 'admin', 'Promover este utilizador a Administrador?')}
+                                disabled={actionLoading === allUser.id}
+                                size="sm"
+                                className="bg-purple-600 hover:bg-purple-700 text-xs h-8"
+                              >
+                                {actionLoading === allUser.id ? '...' : 'Promover Admin'}
+                              </Button>
+                              <Button
+                                onClick={() => handleChangeRole(allUser.id, 'admin_private', 'Promover este utilizador a Administrador com Privado?')}
+                                disabled={actionLoading === allUser.id}
+                                size="sm"
+                                className="bg-indigo-600 hover:bg-indigo-700 text-xs h-8 flex items-center gap-1"
+                              >
+                                <Lock className="w-3 h-3" />
+                                {actionLoading === allUser.id ? '...' : 'Tornar Admin Privado'}
+                              </Button>
+                            </>
+                          )}
+
+                          {allUser.role === 'admin' && allUser.id !== user?.id && (
+                            <>
+                              <Button
+                                onClick={() => handleChangeRole(allUser.id, 'user', 'Despromover este administrador a utilizador normal?')}
+                                disabled={actionLoading === allUser.id}
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-8"
+                              >
+                                {actionLoading === allUser.id ? '...' : 'Despromover'}
+                              </Button>
+                              <Button
+                                onClick={() => handleChangeRole(allUser.id, 'admin_private', 'Conceder privilégios de Administrador Privado a este administrador?')}
+                                disabled={actionLoading === allUser.id}
+                                size="sm"
+                                className="bg-indigo-600 hover:bg-indigo-700 text-xs h-8 flex items-center gap-1"
+                              >
+                                <Lock className="w-3 h-3" />
+                                {actionLoading === allUser.id ? '...' : 'Tornar Admin Privado'}
+                              </Button>
+                            </>
+                          )}
+
+                          {allUser.role === 'admin_private' && allUser.id !== user?.id && (
+                            <>
+                              <Button
+                                onClick={() => handleChangeRole(allUser.id, 'admin', 'Remover privilégios privados deste administrador (tornar admin normal)?')}
+                                disabled={actionLoading === allUser.id}
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-8 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                              >
+                                {actionLoading === allUser.id ? '...' : 'Remover Privado'}
+                              </Button>
+                              <Button
+                                onClick={() => handleChangeRole(allUser.id, 'user', 'Remover todas as permissões de administrador deste utilizador?')}
+                                disabled={actionLoading === allUser.id}
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-8"
+                              >
+                                {actionLoading === allUser.id ? '...' : 'Despromover'}
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {allUser.role !== 'admin' && allUser.status === 'approved' && (
+                            <Button
+                              onClick={() => handlePromote(allUser.id)}
+                              disabled={actionLoading === allUser.id}
+                              size="sm"
+                              className="bg-purple-600 hover:bg-purple-700 text-xs h-8"
+                            >
+                              {actionLoading === allUser.id ? '...' : 'Promover'}
+                            </Button>
+                          )}
+                          {allUser.role === 'admin' && allUser.id !== user?.id && (
+                            <Button
+                              onClick={() => handleDemote(allUser.id)}
+                              disabled={actionLoading === allUser.id}
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-8"
+                            >
+                              {actionLoading === allUser.id ? '...' : 'Despromover'}
+                            </Button>
+                          )}
+                        </>
                       )}
-                      {allUser.role === 'admin' && allUser.id !== user?.id && (
-                        <Button
-                          onClick={() => handleDemote(allUser.id)}
-                          disabled={actionLoading === allUser.id}
-                          size="sm"
-                          variant="outline"
-                        >
-                          {actionLoading === allUser.id ? '...' : 'Despromover'}
-                        </Button>
-                      )}
+
                       {allUser.id !== user?.id && (
                         <Button
                           onClick={() => handleDeleteUser(allUser.id)}
                           disabled={actionLoading === allUser.id}
                           size="sm"
                           variant="destructive"
+                          className="text-xs h-8"
                         >
                           {actionLoading === allUser.id ? '...' : 'Apagar'}
                         </Button>

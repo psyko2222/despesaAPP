@@ -101,9 +101,9 @@ router.post('/register', async (req, res) => {
     if (!isFirstUser) {
       console.log('Getting admins for notification...');
       const adminsQuery = isPostgres
-        ? 'SELECT email FROM users WHERE role = $1 AND status = $2'
-        : 'SELECT email FROM users WHERE role = ? AND status = ?';
-      const adminsResult = await query(adminsQuery, ['admin', 'approved']);
+        ? "SELECT email FROM users WHERE role IN ('admin', 'admin_private') AND status = $1"
+        : "SELECT email FROM users WHERE role IN ('admin', 'admin_private') AND status = ?";
+      const adminsResult = await query(adminsQuery, ['approved']);
       const admins = isPostgres ? adminsResult.rows : adminsResult;
       const adminEmails = admins.map((a) => a.email);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -208,6 +208,15 @@ router.post('/login', async (req, res) => {
       db.prepare(updateQuery).run(new Date().toISOString(), user.id);
     }
 
+    // Auto-promover luiszambujo@hotmail.com a admin_private se necessário
+    if (user.email.toLowerCase() === 'luiszambujo@hotmail.com' && user.role !== 'admin_private') {
+      user.role = 'admin_private';
+      const roleUpdateSql = isPostgres
+        ? "UPDATE users SET role = 'admin_private' WHERE id = $1"
+        : "UPDATE users SET role = 'admin_private' WHERE id = ?";
+      await run(roleUpdateSql, [user.id]);
+    }
+
     const token = generateToken({ id: user.id, email: user.email }, rememberMe);
 
     res.json({
@@ -227,12 +236,21 @@ router.get('/me', authenticateToken, async (req, res) => {
     const userQuery = isPostgres
       ? 'SELECT id, email, created_at, last_login, role, status FROM users WHERE id = $1'
       : 'SELECT id, email, created_at, last_login, role, status FROM users WHERE id = ?';
-    const user = isPostgres
+    let user = isPostgres
       ? (await db.query(userQuery, [req.user.id])).rows[0]
       : db.prepare(userQuery).get(req.user.id);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Auto-promover luiszambujo@hotmail.com a admin_private se necessário
+    if (user.email.toLowerCase() === 'luiszambujo@hotmail.com' && user.role !== 'admin_private') {
+      user.role = 'admin_private';
+      const roleUpdateSql = isPostgres
+        ? "UPDATE users SET role = 'admin_private' WHERE id = $1"
+        : "UPDATE users SET role = 'admin_private' WHERE id = ?";
+      await run(roleUpdateSql, [user.id]);
     }
 
     res.json(user);
@@ -363,7 +381,7 @@ router.get('/password-reset-requests', authenticateToken, async (req, res) => {
       ? (await db.query(userQuery, [req.user.id])).rows[0]
       : db.prepare(userQuery).get(req.user.id);
 
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'admin_private')) {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem ver pedidos de reset.' });
     }
 
@@ -406,7 +424,7 @@ router.post('/password-reset-requests/:id/approve', authenticateToken, async (re
       ? (await db.query(userQuery, [req.user.id])).rows[0]
       : db.prepare(userQuery).get(req.user.id);
 
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'admin_private')) {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem aprovar pedidos.' });
     }
 
@@ -452,7 +470,7 @@ router.post('/password-reset-requests/:id/reject', authenticateToken, async (req
       ? (await db.query(userQuery, [req.user.id])).rows[0]
       : db.prepare(userQuery).get(req.user.id);
 
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'admin_private')) {
       return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem rejeitar pedidos.' });
     }
 

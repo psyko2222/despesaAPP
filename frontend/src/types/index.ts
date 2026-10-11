@@ -11,6 +11,7 @@ export interface Expense {
   original_day: number;
   active_series: number;
   recurrence_months: number;
+  is_private?: number;
   created_at: string;
   updated_at: string;
 }
@@ -128,6 +129,7 @@ export interface Saving {
   reminder_target_reached_enabled?: number;
   target_reached_notified?: number;
   transactions_count?: number;
+  is_private?: number;
   created_at: string;
   updated_at: string;
 }

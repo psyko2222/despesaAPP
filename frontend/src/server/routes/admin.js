@@ -102,7 +102,14 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
       ORDER BY u.created_at DESC
     `;
     const usersResult = await query(sql, []);
-    const users = isPostgres ? usersResult.rows : usersResult;
+    const rawUsers = isPostgres ? usersResult.rows : usersResult;
+    const isCallerPrivateAdmin = req.user?.role === 'admin_private';
+    const users = rawUsers.map(u => {
+      if (!isCallerPrivateAdmin && u.role === 'admin_private') {
+        return { ...u, role: 'admin' };
+      }
+      return u;
+    });
 
     res.json(users);
   } catch (error) {
@@ -111,10 +118,76 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// Change user role (user, admin, admin_private)
+router.post('/users/:userId/role', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    if (!['user', 'admin', 'admin_private'].includes(role)) {
+      return res.status(400).json({ error: 'Função inválida' });
+    }
+
+    const userSql = isPostgres
+      ? 'SELECT id, email, role FROM users WHERE id = $1'
+      : 'SELECT id, email, role FROM users WHERE id = ?';
+    const targetUser = await queryOne(userSql, [userId]);
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Utilizador não encontrado' });
+    }
+
+    // Only admin_private can assign or remove admin_private
+    if ((role === 'admin_private' || targetUser.role === 'admin_private') && req.user.role !== 'admin_private') {
+      return res.status(403).json({ error: 'Apenas um Administrador com Privado pode gerir esta função' });
+    }
+
+    // Prevent removing admin rights if this is the only admin
+    if (role === 'user' && (targetUser.role === 'admin' || targetUser.role === 'admin_private')) {
+      if (parseInt(userId) === req.user.id) {
+        return res.status(400).json({ error: 'Não pode despromover o seu próprio utilizador' });
+      }
+      const adminCountSql = isPostgres
+        ? "SELECT COUNT(*) as count FROM users WHERE role IN ('admin', 'admin_private')"
+        : "SELECT COUNT(*) as count FROM users WHERE role IN ('admin', 'admin_private')";
+      const adminCount = await queryOne(adminCountSql, []);
+      if (adminCount.count <= 1) {
+        return res.status(400).json({ error: 'Não é possível despromover o único administrador' });
+      }
+    }
+
+    const updateRoleSql = isPostgres
+      ? 'UPDATE users SET role = $1 WHERE id = $2'
+      : 'UPDATE users SET role = ? WHERE id = ?';
+    await run(updateRoleSql, [role, userId]);
+
+    const updatedUser = await queryOne(userSql, [userId]);
+    if (req.user.role !== 'admin_private' && updatedUser.role === 'admin_private') {
+      updatedUser.role = 'admin';
+    }
+
+    res.json({
+      message: 'Função atualizada com sucesso',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Change role error:', error);
+    res.status(500).json({ error: 'Falha ao atualizar função do utilizador' });
+  }
+});
+
 // Promote user to admin
 router.post('/users/:userId/promote', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
+
+    const userSql = isPostgres
+      ? 'SELECT id, email, role FROM users WHERE id = $1'
+      : 'SELECT id, email, role FROM users WHERE id = ?';
+    const targetUser = await queryOne(userSql, [userId]);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     // Update user role to admin
     const updateRoleSql = isPostgres
@@ -122,10 +195,6 @@ router.post('/users/:userId/promote', authenticateToken, requireAdmin, async (re
       : 'UPDATE users SET role = ? WHERE id = ?';
     await run(updateRoleSql, ['admin', userId]);
 
-    // Get user details
-    const userSql = isPostgres
-      ? 'SELECT id, email, role FROM users WHERE id = $1'
-      : 'SELECT id, email, role FROM users WHERE id = ?';
     const user = await queryOne(userSql, [userId]);
 
     res.json({
@@ -148,10 +217,22 @@ router.post('/users/:userId/demote', authenticateToken, requireAdmin, async (req
       return res.status(400).json({ error: 'Cannot demote yourself' });
     }
 
+    const userSql = isPostgres
+      ? 'SELECT id, email, role FROM users WHERE id = $1'
+      : 'SELECT id, email, role FROM users WHERE id = ?';
+    const targetUser = await queryOne(userSql, [userId]);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (targetUser.role === 'admin_private' && req.user.role !== 'admin_private') {
+      return res.status(403).json({ error: 'Apenas um Administrador com Privado pode alterar este utilizador' });
+    }
+
     // Check if this is the only admin
     const adminCountSql = isPostgres
-      ? "SELECT COUNT(*) as count FROM users WHERE role = 'admin'"
-      : "SELECT COUNT(*) as count FROM users WHERE role = 'admin'";
+      ? "SELECT COUNT(*) as count FROM users WHERE role IN ('admin', 'admin_private')"
+      : "SELECT COUNT(*) as count FROM users WHERE role IN ('admin', 'admin_private')";
     const adminCount = await queryOne(adminCountSql, []);
     if (adminCount.count <= 1) {
       return res.status(400).json({ error: 'Cannot demote the only admin' });
@@ -163,10 +244,6 @@ router.post('/users/:userId/demote', authenticateToken, requireAdmin, async (req
       : 'UPDATE users SET role = ? WHERE id = ?';
     await run(updateRoleSql, ['user', userId]);
 
-    // Get user details
-    const userSql = isPostgres
-      ? 'SELECT id, email, role FROM users WHERE id = $1'
-      : 'SELECT id, email, role FROM users WHERE id = ?';
     const user = await queryOne(userSql, [userId]);
 
     res.json({
@@ -189,15 +266,18 @@ router.delete('/users/:userId', authenticateToken, requireAdmin, async (req, res
       return res.status(400).json({ error: 'Cannot delete yourself' });
     }
 
-    // Check if this is the only admin
+    // Check if this is an admin or admin_private
     const userSql = isPostgres
       ? 'SELECT role FROM users WHERE id = $1'
       : 'SELECT role FROM users WHERE id = ?';
     const userToDelete = await queryOne(userSql, [userId]);
-    if (userToDelete && userToDelete.role === 'admin') {
+    if (userToDelete && userToDelete.role === 'admin_private' && req.user.role !== 'admin_private') {
+      return res.status(403).json({ error: 'Apenas um Administrador com Privado pode eliminar este utilizador' });
+    }
+    if (userToDelete && (userToDelete.role === 'admin' || userToDelete.role === 'admin_private')) {
       const adminCountSql = isPostgres
-        ? "SELECT COUNT(*) as count FROM users WHERE role = 'admin'"
-        : "SELECT COUNT(*) as count FROM users WHERE role = 'admin'";
+        ? "SELECT COUNT(*) as count FROM users WHERE role IN ('admin', 'admin_private')"
+        : "SELECT COUNT(*) as count FROM users WHERE role IN ('admin', 'admin_private')";
       const adminCount = await queryOne(adminCountSql, []);
       if (adminCount.count <= 1) {
         return res.status(400).json({ error: 'Cannot delete the only admin' });

@@ -11,11 +11,26 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, async (err, decoded) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
-    req.user = user;
+    try {
+      const userQuery = isPostgres
+        ? 'SELECT id, email, role, status FROM users WHERE id = $1'
+        : 'SELECT id, email, role, status FROM users WHERE id = ?';
+      const userRes = isPostgres
+        ? (await db.query(userQuery, [decoded.id])).rows[0]
+        : db.prepare(userQuery).get(decoded.id);
+
+      if (userRes) {
+        req.user = { id: userRes.id, email: userRes.email, role: userRes.role, status: userRes.status };
+      } else {
+        req.user = decoded;
+      }
+    } catch (dbErr) {
+      req.user = decoded;
+    }
     next();
   });
 }
@@ -94,19 +109,20 @@ function requireDeleteAccess(req, res, next) {
   next();
 }
 
-// Middleware to check if user is admin
+// Middleware to check if user is admin (admin or admin_private)
 async function requireAdmin(req, res, next) {
-  const userQuery = isPostgres
-    ? 'SELECT role FROM users WHERE id = $1'
-    : 'SELECT role FROM users WHERE id = ?';
-  const user = isPostgres
-    ? (await db.query(userQuery, [req.user.id])).rows[0]
-    : db.prepare(userQuery).get(req.user.id);
-
-  if (!user || user.role !== 'admin') {
+  const role = req.user?.role;
+  if (role !== 'admin' && role !== 'admin_private') {
     return res.status(403).json({ error: 'Admin access required' });
   }
+  next();
+}
 
+// Middleware to check if user is admin with private powers
+function requireAdminPrivate(req, res, next) {
+  if (req.user?.role !== 'admin_private') {
+    return res.status(403).json({ error: 'Acesso de Administrador Privado obrigatório' });
+  }
   next();
 }
 
@@ -116,5 +132,6 @@ module.exports = {
   checkDataAccess,
   requireWriteAccess,
   requireDeleteAccess,
-  requireAdmin
+  requireAdmin,
+  requireAdminPrivate
 };
