@@ -47,7 +47,7 @@ async function processDebitReminders(options = {}) {
 
   // 1. Obter utilizadores aprovados com notificações ativas
   const usersSql = `
-    SELECT u.id, u.email, u.google_refresh_token,
+    SELECT u.id, u.email, u.role, u.google_refresh_token,
            COALESCE(s.notifications_enabled, 1) as notifications_enabled,
            COALESCE(s.debit_notifications_enabled, 1) as debit_notifications_enabled,
            COALESCE(s.debit_reminder_days, 1) as debit_reminder_days,
@@ -79,6 +79,7 @@ async function processDebitReminders(options = {}) {
 
   for (const user of users) {
     if (user.notifications_enabled === 0) continue;
+    const isPrivateAdmin = user.role === 'admin_private';
 
     // Obter subscrições Web Push do utilizador
     const subsSql = 'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1';
@@ -132,9 +133,11 @@ async function processDebitReminders(options = {}) {
       targetDate.setDate(targetDate.getDate() + daysBefore);
       const targetDateStr = targetDate.toISOString().split('T')[0];
 
-      const expensesSql = 'SELECT * FROM expenses WHERE user_id = $1 AND debit_date = $2 AND paid = 0 ORDER BY debit_date';
+      const expensesSql = isPostgres
+        ? `SELECT * FROM expenses WHERE user_id = $1 AND debit_date = $2 AND paid = 0 ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY debit_date`
+        : `SELECT * FROM expenses WHERE user_id = ? AND debit_date = ? AND paid = 0 ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY debit_date`;
       const expensesResult = await query(expensesSql, [user.id, targetDateStr]);
-      const expenses = expensesResult.rows || expensesResult;
+      const expenses = isPostgres ? (expensesResult.rows || expensesResult) : expensesResult;
 
       if (!expenses || expenses.length === 0) continue;
 
@@ -224,9 +227,11 @@ async function processDebitReminders(options = {}) {
         const startDateStr = period.start.toISOString().split('T')[0];
         const endDateStr = period.end.toISOString().split('T')[0];
 
-        const noValSql = 'SELECT * FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3 AND (amount_cents = 0 OR amount_cents IS NULL) ORDER BY debit_date ASC';
+        const noValSql = isPostgres
+          ? `SELECT * FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3 AND (amount_cents = 0 OR amount_cents IS NULL) ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY debit_date ASC`
+          : `SELECT * FROM expenses WHERE user_id = ? AND debit_date BETWEEN ? AND ? AND (amount_cents = 0 OR amount_cents IS NULL) ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY debit_date ASC`;
         const noValResult = await query(noValSql, [user.id, startDateStr, endDateStr]);
-        const noValExpenses = noValResult.rows || noValResult;
+        const noValExpenses = isPostgres ? (noValResult.rows || noValResult) : noValResult;
 
         if (noValExpenses && noValExpenses.length > 0) {
           const count = noValExpenses.length;
@@ -309,11 +314,13 @@ async function processDebitReminders(options = {}) {
         ? `SELECT * FROM savings 
            WHERE user_id = $1 
              AND target_date IS NOT NULL 
-             AND reminder_date_enabled = 1`
+             AND reminder_date_enabled = 1
+             ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'}`
         : `SELECT * FROM savings 
            WHERE user_id = ? 
              AND target_date IS NOT NULL 
-             AND reminder_date_enabled = 1`;
+             AND reminder_date_enabled = 1
+             ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'}`;
       const savingsResult = await query(savingsSql, [user.id]);
       const userSavings = isPostgres ? (savingsResult.rows || savingsResult) : savingsResult;
 
@@ -420,8 +427,8 @@ async function processDebitReminders(options = {}) {
         try {
           // Gerar os dados do backup
           const expensesSql = isPostgres
-            ? 'SELECT * FROM expenses WHERE user_id = $1 ORDER BY id'
-            : 'SELECT * FROM expenses WHERE user_id = ? ORDER BY id';
+            ? `SELECT * FROM expenses WHERE user_id = $1 ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY id`
+            : `SELECT * FROM expenses WHERE user_id = ? ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY id`;
           const expensesResult = await query(expensesSql, [user.id]);
           const userExpenses = isPostgres ? expensesResult.rows : expensesResult;
 

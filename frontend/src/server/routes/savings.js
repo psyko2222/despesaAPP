@@ -359,7 +359,7 @@ router.post('/', authenticateToken, async (req, res) => {
         type: 'saving_goal',
         tag: `saving-goal-${newSaving.id}`
       });
-      if (req.user.id !== access.userId) {
+      if (req.user.id !== access.userId && finalIsPrivate !== 1) {
         await sendNotificationToUser(req.user.id, {
           title: `🎉 Meta Atingida: ${name.trim()}!`,
           message: `Parabéns! Atingiu o objetivo definido de ${valStr} na poupança partilhada "${name.trim()}"!`,
@@ -469,7 +469,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
         type: 'saving_goal',
         tag: `saving-goal-${id}`
       });
-      if (req.user.id !== prevSaving.user_id) {
+      if (req.user.id !== prevSaving.user_id && targetIsPrivate !== 1) {
         await sendNotificationToUser(req.user.id, {
           title: `🎉 Meta Atingida: ${name.trim()}!`,
           message: `Parabéns! Atingiu o objetivo definido de ${valStr} na poupança partilhada "${name.trim()}"!`,
@@ -632,7 +632,7 @@ router.post('/:id/transactions', authenticateToken, async (req, res) => {
         type: 'saving_goal',
         tag: `saving-goal-${saving.id}`
       });
-      if (req.user.id !== saving.user_id) {
+      if (req.user.id !== saving.user_id && saving.is_private !== 1) {
         await sendNotificationToUser(req.user.id, {
           title: `🎉 Meta Atingida: ${saving.name}!`,
           message: `Parabéns! Atingiu o objetivo definido de ${valStr} na poupança partilhada "${saving.name}"!`,

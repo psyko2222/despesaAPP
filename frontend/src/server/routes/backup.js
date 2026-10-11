@@ -8,10 +8,11 @@ router.get('/export', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
+    const isPrivateAdmin = req.user?.role === 'admin_private';
     // Get expenses
     const expensesSql = isPostgres
-      ? 'SELECT * FROM expenses WHERE user_id = $1 ORDER BY id'
-      : 'SELECT * FROM expenses WHERE user_id = ? ORDER BY id';
+      ? `SELECT * FROM expenses WHERE user_id = $1 ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY id`
+      : `SELECT * FROM expenses WHERE user_id = ? ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY id`;
     const expensesResult = await query(expensesSql, [userId]);
     const expenses = isPostgres ? expensesResult.rows : expensesResult;
 
