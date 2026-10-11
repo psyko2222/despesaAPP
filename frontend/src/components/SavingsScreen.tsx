@@ -609,9 +609,9 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
 
       {/* Modal de Criação / Edição de Poupança */}
       {isFormOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl w-full max-w-md p-5 sm:p-6 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-150 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh] max-h-[85dvh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 dark:border-gray-800 shrink-0">
               <h3 className="font-bold text-base sm:text-lg text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <PiggyBank className="w-5 h-5 text-emerald-600" />
                 {editingSaving ? 'Editar Poupança' : 'Nova Poupança'}
@@ -619,196 +619,199 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveForm} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1">
-                  Nome da Poupança *
-                </label>
-                <Input
-                  type="text"
-                  placeholder="Ex: Férias, Fundo de Emergência, Carro..."
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  required
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1">
-                  Valor a Atingir / Meta (€)
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Opcional (ex: 1000.00)"
-                  value={formTarget}
-                  onChange={(e) => setFormTarget(e.target.value)}
-                />
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                  Se deixar em branco, não será calculada meta nem valor em falta (mealheiro livre).
-                </p>
-              </div>
-
-              {!editingSaving && (
+            <form onSubmit={handleSaveForm} className="flex flex-col min-h-0 flex-1">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1">
-                    Valor Inicial Acumulado (€)
+                    Nome da Poupança *
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="Ex: Férias, Fundo de Emergência, Carro..."
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1">
+                    Valor a Atingir / Meta (€)
                   </label>
                   <Input
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="Opcional (ex: 50.00)"
-                    value={formInitial}
-                    onChange={(e) => setFormInitial(e.target.value)}
+                    placeholder="Opcional (ex: 1000.00)"
+                    value={formTarget}
+                    onChange={(e) => setFormTarget(e.target.value)}
                   />
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                    Pode começar com saldo 0 ou com um valor que já tenha de lado.
+                    Se deixar em branco, não será calculada meta nem valor em falta (mealheiro livre).
                   </p>
                 </div>
-              )}
 
-              {/* Data Limite / Prazo */}
-              <div>
-                <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1 flex items-center justify-between">
-                  <span>Data Limite (Prazo)</span>
-                  <span className="text-[10px] font-normal text-gray-400 lowercase">opcional</span>
-                </label>
-                <div className="relative">
-                  <Input
-                    type="date"
-                    value={formTargetDate}
-                    onChange={(e) => setFormTargetDate(e.target.value)}
-                    className="text-sm"
-                  />
-                  {formTargetDate && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFormTargetDate('');
-                        setFormReminderDate(false);
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800"
-                      title="Limpar data limite"
-                    >
-                      Limpar
-                    </button>
-                  )}
-                </div>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                  Defina um prazo caso pretenda completar esta poupança até uma data específica.
-                </p>
-              </div>
-
-              {/* Notificações Selecionáveis */}
-              <div className="bg-emerald-50/50 dark:bg-gray-800/60 rounded-xl p-3.5 border border-emerald-100 dark:border-gray-700 space-y-3">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-gray-100">
-                  <Bell className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Notificações e Alertas Programados</span>
-                </div>
-
-                {/* Opção 1: Aproximação da Data Limite */}
-                <div className="space-y-2">
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formReminderDate}
-                      onChange={(e) => {
-                        if (!formTargetDate && !formReminderDate) {
-                          toast.error('Indique primeiro uma data limite para ativar este aviso');
-                          return;
-                        }
-                        setFormReminderDate(e.target.checked);
-                      }}
-                      className="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                {!editingSaving && (
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1">
+                      Valor Inicial Acumulado (€)
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Opcional (ex: 50.00)"
+                      value={formInitial}
+                      onChange={(e) => setFormInitial(e.target.value)}
                     />
-                    <div className="flex-1">
-                      <span className={`text-xs font-semibold ${formTargetDate ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
-                        Avisar sobre aproximação da data limite
-                      </span>
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                        {formTargetDate 
-                          ? 'Notificação agendada na aplicação e push antes de atingir o prazo.'
-                          : 'Defina uma data limite acima para programar este aviso.'}
-                      </p>
-                    </div>
-                  </label>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                      Pode começar com saldo 0 ou com um valor que já tenha de lado.
+                    </p>
+                  </div>
+                )}
 
-                  {formReminderDate && formTargetDate && (
-                    <div className="pl-6 pt-1 flex items-center gap-2">
-                      <label className="text-[11px] font-medium text-gray-600 dark:text-gray-300">
-                        Antecedência do aviso:
-                      </label>
-                      <select
-                        value={formReminderDays}
-                        onChange={(e) => setFormReminderDays(parseInt(e.target.value, 10))}
-                        className="text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1 text-gray-800 dark:text-gray-200 focus:outline-hidden focus:ring-1 focus:ring-emerald-500 font-medium"
+                {/* Data Limite / Prazo */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1 flex items-center justify-between">
+                    <span>Data Limite (Prazo)</span>
+                    <span className="text-[10px] font-normal text-gray-400 lowercase">opcional</span>
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type="date"
+                      value={formTargetDate}
+                      onChange={(e) => setFormTargetDate(e.target.value)}
+                      className="text-sm"
+                    />
+                    {formTargetDate && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormTargetDate('');
+                          setFormReminderDate(false);
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800"
+                        title="Limpar data limite"
                       >
-                        <option value={1}>1 dia antes</option>
-                        <option value={3}>3 dias antes</option>
-                        <option value={5}>5 dias antes</option>
-                        <option value={7}>7 dias antes (recomendado)</option>
-                        <option value={15}>15 dias antes</option>
-                        <option value={30}>30 dias antes</option>
-                      </select>
-                    </div>
-                  )}
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                    Defina um prazo caso pretenda completar esta poupança até uma data específica.
+                  </p>
                 </div>
 
-                {/* Opção 2: Valor Definido / Meta Completado */}
-                <div className="pt-2.5 border-t border-emerald-100/80 dark:border-gray-700/80">
-                  <label className="flex items-start gap-2.5 cursor-pointer">
+                {/* Notificações Selecionáveis */}
+                <div className="bg-emerald-50/50 dark:bg-gray-800/60 rounded-xl p-3.5 border border-emerald-100 dark:border-gray-700 space-y-3">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-gray-100">
+                    <Bell className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Notificações e Alertas Programados</span>
+                  </div>
+
+                  {/* Opção 1: Aproximação da Data Limite */}
+                  <div className="space-y-2">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formReminderDate}
+                        onChange={(e) => {
+                          if (!formTargetDate && !formReminderDate) {
+                            toast.error('Indique primeiro uma data limite para ativar este aviso');
+                            return;
+                          }
+                          setFormReminderDate(e.target.checked);
+                        }}
+                        className="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div className="flex-1">
+                        <span className={`text-xs font-semibold ${formTargetDate ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                          Avisar sobre aproximação da data limite
+                        </span>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                          {formTargetDate 
+                            ? 'Notificação agendada na aplicação e push antes de atingir o prazo.'
+                            : 'Defina uma data limite acima para programar este aviso.'}
+                        </p>
+                      </div>
+                    </label>
+
+                    {formReminderDate && formTargetDate && (
+                      <div className="pl-6 pt-1 flex items-center gap-2">
+                        <label className="text-[11px] font-medium text-gray-600 dark:text-gray-300">
+                          Antecedência do aviso:
+                        </label>
+                        <select
+                          value={formReminderDays}
+                          onChange={(e) => setFormReminderDays(parseInt(e.target.value, 10))}
+                          className="text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1 text-gray-800 dark:text-gray-200 focus:outline-hidden focus:ring-1 focus:ring-emerald-500 font-medium"
+                        >
+                          <option value={1}>1 dia antes</option>
+                          <option value={3}>3 dias antes</option>
+                          <option value={5}>5 dias antes</option>
+                          <option value={7}>7 dias antes (recomendado)</option>
+                          <option value={15}>15 dias antes</option>
+                          <option value={30}>30 dias antes</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Opção 2: Valor Definido / Meta Completado */}
+                  <div className="pt-2.5 border-t border-emerald-100/80 dark:border-gray-700/80">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formReminderTarget}
+                        onChange={(e) => {
+                          if (!formTarget && !formReminderTarget) {
+                            toast.error('Indique primeiro um valor a atingir / meta para ativar este aviso');
+                            return;
+                          }
+                          setFormReminderTarget(e.target.checked);
+                        }}
+                        className="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div className="flex-1">
+                        <span className={`text-xs font-semibold ${formTarget && parseFloat(formTarget.replace(',', '.')) > 0 ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                          Avisar quando o valor definido for completado
+                        </span>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                          {formTarget && parseFloat(formTarget.replace(',', '.')) > 0
+                            ? 'Notificação imediata assim que atingir 100% do objetivo estipulado.'
+                            : 'Defina um valor de meta acima para ativar.'}
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {canPrivate && (
+                  <div className="flex items-center space-x-2 pt-2 border-t border-gray-100 dark:border-gray-800">
                     <input
                       type="checkbox"
-                      checked={formReminderTarget}
-                      onChange={(e) => {
-                        if (!formTarget && !formReminderTarget) {
-                          toast.error('Indique primeiro um valor a atingir / meta para ativar este aviso');
-                          return;
-                        }
-                        setFormReminderTarget(e.target.checked);
-                      }}
-                      className="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                      id="formIsPrivate"
+                      checked={formIsPrivate}
+                      onChange={(e) => setFormIsPrivate(e.target.checked)}
+                      className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
                     />
-                    <div className="flex-1">
-                      <span className={`text-xs font-semibold ${formTarget && parseFloat(formTarget.replace(',', '.')) > 0 ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
-                        Avisar quando o valor definido for completado
-                      </span>
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                        {formTarget && parseFloat(formTarget.replace(',', '.')) > 0
-                          ? 'Notificação imediata assim que atingir 100% do objetivo estipulado.'
-                          : 'Defina um valor de meta acima para ativar.'}
-                      </p>
-                    </div>
-                  </label>
-                </div>
+                    <label htmlFor="formIsPrivate" className="text-xs font-semibold text-amber-800 dark:text-amber-300 cursor-pointer flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5" />
+                      Poupança Privada (visível apenas para mim)
+                    </label>
+                  </div>
+                )}
               </div>
 
-              {canPrivate && (
-                <div className="flex items-center space-x-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-                  <input
-                    type="checkbox"
-                    id="formIsPrivate"
-                    checked={formIsPrivate}
-                    onChange={(e) => setFormIsPrivate(e.target.checked)}
-                    className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
-                  />
-                  <label htmlFor="formIsPrivate" className="text-xs font-semibold text-amber-800 dark:text-amber-300 cursor-pointer flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5" />
-                    Poupança Privada (visível apenas para mim)
-                  </label>
-                </div>
-              )}
-
-              <div className="flex gap-2 justify-end pt-3">
+              {/* Botões do Rodapé (Fixos e sempre visíveis acima da barra do Android) */}
+              <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/90 dark:bg-gray-900/90 shrink-0 flex gap-2 justify-end">
                 <Button
                   type="button"
                   variant="outline"
@@ -820,7 +823,7 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
                 <Button
                   type="submit"
                   disabled={submittingForm}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
                 >
                   {submittingForm ? 'A guardar...' : editingSaving ? 'Guardar Alterações' : 'Criar Poupança'}
                 </Button>
@@ -832,9 +835,9 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
 
       {/* Modal de Movimento (+ Adicionar / - Subtrair) */}
       {txModalSaving && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-5 sm:p-6 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-150 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl w-full max-w-sm flex flex-col max-h-[85vh] max-h-[85dvh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 dark:border-gray-800 shrink-0">
               <h3 className="font-bold text-base text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 {txType === 'deposit' ? (
                   <ArrowUpRight className="w-5 h-5 text-emerald-600" />
@@ -846,60 +849,62 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
               <button
                 type="button"
                 onClick={() => setTxModalSaving(null)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Poupança: <strong className="text-gray-800 dark:text-gray-200">{txModalSaving.name}</strong> 
-              {' '}(Saldo atual: {formatMoney(txModalSaving.current_amount_cents)})
-            </p>
+            <form onSubmit={handleSaveTransaction} className="flex flex-col min-h-0 flex-1">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Poupança: <strong className="text-gray-800 dark:text-gray-200">{txModalSaving.name}</strong> 
+                  {' '}(Saldo atual: {formatMoney(txModalSaving.current_amount_cents)})
+                </p>
 
-            <form onSubmit={handleSaveTransaction} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1">
-                  Valor a {txType === 'deposit' ? 'Adicionar' : 'Subtrair'} (€) *
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="0.00"
-                  value={txAmount}
-                  onChange={(e) => setTxAmount(e.target.value)}
-                  required
-                  autoFocus
-                  className="text-lg font-bold"
-                />
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1">
+                    Valor a {txType === 'deposit' ? 'Adicionar' : 'Subtrair'} (€) *
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="0.00"
+                    value={txAmount}
+                    onChange={(e) => setTxAmount(e.target.value)}
+                    required
+                    autoFocus
+                    className="text-lg font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1">
+                    Descrição ou Nota (Opcional)
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder={txType === 'deposit' ? 'Ex: Poupança do mês, Bónus...' : 'Ex: Despesa inesperada, Compra...'}
+                    value={txDescription}
+                    onChange={(e) => setTxDescription(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1">
+                    Data do Movimento
+                  </label>
+                  <Input
+                    type="date"
+                    value={txDate}
+                    onChange={(e) => setTxDate(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1">
-                  Descrição ou Nota (Opcional)
-                </label>
-                <Input
-                  type="text"
-                  placeholder={txType === 'deposit' ? 'Ex: Poupança do mês, Bónus...' : 'Ex: Despesa inesperada, Compra...'}
-                  value={txDescription}
-                  onChange={(e) => setTxDescription(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase text-gray-700 dark:text-gray-300 mb-1">
-                  Data do Movimento
-                </label>
-                <Input
-                  type="date"
-                  value={txDate}
-                  onChange={(e) => setTxDate(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="flex gap-2 justify-end pt-3">
+              <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/90 dark:bg-gray-900/90 shrink-0 flex gap-2 justify-end">
                 <Button
                   type="button"
                   variant="outline"
@@ -911,7 +916,7 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
                 <Button
                   type="submit"
                   disabled={submittingTx}
-                  className={txType === 'deposit' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white'}
+                  className={txType === 'deposit' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-semibold' : 'bg-amber-600 hover:bg-amber-700 text-white font-semibold'}
                 >
                   {submittingTx ? 'A registar...' : txType === 'deposit' ? 'Confirmar Depósito' : 'Confirmar Retirada'}
                 </Button>
@@ -923,8 +928,8 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
 
       {/* Modal de Histórico de Movimentos */}
       {historySaving && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl w-full max-w-lg p-5 flex flex-col max-h-[85vh]">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-150 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl w-full max-w-lg p-5 flex flex-col max-h-[85vh] max-h-[85dvh]">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
               <div>
                 <h3 className="font-bold text-base sm:text-lg text-gray-900 dark:text-gray-100 flex items-center gap-2">
@@ -1019,8 +1024,8 @@ export function SavingsScreen({ userId, permissions, accountEmail }: SavingsScre
 
       {/* Confirmação para apagar poupança */}
       {savingToDelete && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-150 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 max-h-[85vh] max-h-[85dvh] overflow-y-auto">
             <h3 className="font-bold text-base text-gray-900 dark:text-gray-100">
               Apagar Poupança
             </h3>
