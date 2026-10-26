@@ -30,7 +30,7 @@ export function SettingsScreen() {
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [cleanupYears, setCleanupYears] = useState(1.5);
+  const [cleanupYears, setCleanupYears] = useState(1);
   const [cleanupStats, setCleanupStats] = useState<any>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupDeleting, setCleanupDeleting] = useState(false);
@@ -1060,7 +1060,8 @@ export function SettingsScreen() {
               </label>
               <div className="flex flex-wrap gap-2">
                 {[
-                  { value: 1.5, label: '1 ano e 6 meses' },
+                  { value: 0.5, label: '6 meses' },
+                  { value: 1, label: '1 ano' },
                   { value: 2, label: '2 anos' },
                   { value: 3, label: '3 anos' },
                   { value: 4, label: '4 anos' },
@@ -1089,9 +1090,11 @@ export function SettingsScreen() {
                   d.setMonth(d.getMonth() - Math.round(cleanupYears * 12));
                   return d.toLocaleDateString('pt-PT');
                 })()} ({
-                  cleanupYears === 1.5 
-                    ? 'com mais de 1 ano e 6 meses / 18 meses' 
-                    : `com mais de ${cleanupYears} anos`
+                  cleanupYears === 0.5
+                    ? 'com mais de 6 meses'
+                    : cleanupYears === 1
+                      ? 'com mais de 1 ano'
+                      : `com mais de ${cleanupYears} anos`
                 }).
               </p>
               <p className="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-1.5 leading-relaxed">

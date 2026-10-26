@@ -271,8 +271,8 @@ router.delete('/expenses/cleanup', authenticateToken, async (req, res) => {
     }
 
     const yearsNum = parseFloat(years);
-    if (isNaN(yearsNum) || yearsNum < 1 || yearsNum > 10) {
-      return res.status(400).json({ error: 'Anos deve ser entre 1 e 10' });
+    if (isNaN(yearsNum) || yearsNum < 0.5 || yearsNum > 10) {
+      return res.status(400).json({ error: 'Período deve ser entre 6 meses (0.5) e 10 anos' });
     }
 
     // Calcular data limite com base nos meses para permitir anos fracionários (ex: 1.5 = 18 meses)
@@ -371,6 +371,9 @@ router.get('/expenses/cleanup/stats', authenticateToken, async (req, res) => {
     }
 
     const yearsNum = parseFloat(years);
+    if (isNaN(yearsNum) || yearsNum < 0.5 || yearsNum > 10) {
+      return res.status(400).json({ error: 'Período deve ser entre 6 meses (0.5) e 10 anos' });
+    }
     const monthsNum = Math.round(yearsNum * 12);
     const cutoffDate = new Date();
     cutoffDate.setMonth(cutoffDate.getMonth() - monthsNum);

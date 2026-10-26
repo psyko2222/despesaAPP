@@ -74,8 +74,9 @@ interface BackupData {
 const formatCleanupYears = (val?: number | string) => {
   if (!val) return 'Desativada';
   const num = Number(val);
-  if (num === 1.5) return '1 ano e 6 meses (18 meses)';
+  if (num === 0.5) return '6 meses';
   if (num === 1) return '1 ano';
+  if (num === 1.5) return '1 ano e 6 meses';
   return `${num} anos`;
 };
 
