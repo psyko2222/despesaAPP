@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { logsAPI, settingsAPI } from '@/lib/api';
 import api from '@/lib/api';
+import { AdminBackupViewer } from '@/components/AdminBackupViewer';
 
 interface PendingUser {
   id: number;
@@ -67,7 +68,7 @@ export function AdminPanel() {
   const [passwordResetRequests, setPasswordResetRequests] = useState<PasswordResetRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'logs' | 'config' | 'password-reset'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'logs' | 'config' | 'password-reset' | 'backup-viewer'>('pending');
   const [logFilter, setLogFilter] = useState<'all' | 'error' | 'warning' | 'info'>('all');
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
 
@@ -378,6 +379,17 @@ export function AdminPanel() {
             }`}
           >
             Configuração Email
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('backup-viewer')}
+            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+              activeTab === 'backup-viewer'
+                ? 'bg-primary-600 text-white shadow-sm ring-2 ring-primary-500/20'
+                : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800'
+            }`}
+          >
+            Consultar Backup (Leitura)
           </button>
         </div>
 
@@ -859,6 +871,10 @@ export function AdminPanel() {
               <p className="text-gray-600 text-center py-4">Não foi possível carregar a configuração</p>
             )}
           </>
+        )}
+
+        {activeTab === 'backup-viewer' && (
+          <AdminBackupViewer />
         )}
       </CardContent>
     </Card>

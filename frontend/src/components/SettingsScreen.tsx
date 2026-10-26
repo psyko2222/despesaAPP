@@ -252,18 +252,28 @@ export function SettingsScreen() {
       return;
     }
 
-    if (!confirm(`Tem a certeza que deseja apagar ${cleanupStats.stats.totalToDelete} registos antigos? Esta ação é irreversível!`)) {
+    const oldestStr = cleanupStats.stats.oldestDate ? new Date(cleanupStats.stats.oldestDate).toLocaleDateString('pt-PT') : '';
+    const newestStr = cleanupStats.stats.newestDate ? new Date(cleanupStats.stats.newestDate).toLocaleDateString('pt-PT') : '';
+    const dateRange = oldestStr && newestStr ? ` (${oldestStr} a ${newestStr})` : '';
+
+    if (!confirm(`Tem a certeza que deseja apagar ${cleanupStats.stats.totalToDelete} registos antigos${dateRange}?\n\nSerá criada automaticamente uma cópia de segurança no Google Drive com os dados a eliminar antes da sua remoção.`)) {
       return;
     }
 
     setCleanupDeleting(true);
     try {
       const response = await adminAPI.cleanupExpenses(cleanupYears);
-      toast.success(`${response.data.deletedCount} registos apagados com sucesso!`);
+      if (response.data.driveBackup) {
+        toast.success(`Apagados ${response.data.deletedCount} registos. Cópia guardada no Google Drive: ${response.data.fileName}`);
+      } else if (response.data.driveError) {
+        toast.warning(`Apagados ${response.data.deletedCount} registos. Aviso no Google Drive: ${response.data.driveError}`);
+      } else {
+        toast.success(`${response.data.deletedCount} registos apagados com sucesso.`);
+      }
       setCleanupStats(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to cleanup expenses:', error);
-      toast.error('Erro ao apagar registos antigos');
+      toast.error(error.response?.data?.error || 'Erro ao apagar registos antigos');
     } finally {
       setCleanupDeleting(false);
     }
@@ -1063,9 +1073,13 @@ export function SettingsScreen() {
               </div>
             </div>
 
-            <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-4 rounded">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
+            <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-4 rounded-xl space-y-2">
+              <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
                 Vão ser apagados todos os registos anteriores a {new Date(new Date().setFullYear(new Date().getFullYear() - cleanupYears)).getFullYear()}.
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-1.5 leading-relaxed">
+                <span>☁️</span>
+                <span>Salvaguarda Automática: Antes da eliminação, é criado automaticamente um backup no Google Drive (pasta <strong>eliminados</strong>) com o nome <strong>deleted_inicio_[data]_fim_[data].json</strong> para que nunca perca o histórico.</span>
               </p>
             </div>
 

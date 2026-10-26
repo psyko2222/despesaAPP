@@ -194,6 +194,15 @@ export const adminAPI = {
 
   cleanupExpenses: (years: number) =>
     api.delete<any>(`/admin/expenses/cleanup?years=${years}`),
+
+  getGoogleBackups: () =>
+    api.get<{ connected: boolean; files: Array<{ id: string; name: string; folder: string; size: number; createdTime: string; modifiedTime?: string }> }>('/admin/backups/google'),
+
+  getGoogleBackupContent: (fileId: string) =>
+    api.get<any>(`/admin/backups/google/${fileId}`),
+
+  getUserCurrentBackup: (targetUserId?: number) =>
+    api.get<any>(targetUserId ? `/admin/backups/user-current/${targetUserId}` : '/admin/backups/user-current'),
 };
 
 export const savingsAPI = {

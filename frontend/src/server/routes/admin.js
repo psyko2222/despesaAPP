@@ -304,7 +304,7 @@ router.delete('/users/:userId', authenticateToken, requireAdmin, async (req, res
   }
 });
 
-// Delete old expenses
+// Delete old expenses with automatic backup to Google Drive
 router.delete('/expenses/cleanup', authenticateToken, async (req, res) => {
   try {
     const { years } = req.query;
@@ -323,16 +323,92 @@ router.delete('/expenses/cleanup', authenticateToken, async (req, res) => {
     cutoffDate.setFullYear(cutoffDate.getFullYear() - yearsNum);
     const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
 
-    // Delete expenses older than cutoff date for current user
+    // 1. Obter os registos que vão ser apagados antes de qualquer eliminação
+    const selectSql = isPostgres
+      ? 'SELECT * FROM expenses WHERE user_id = $1 AND debit_date < $2 ORDER BY debit_date ASC'
+      : 'SELECT * FROM expenses WHERE user_id = ? AND debit_date < ? ORDER BY debit_date ASC';
+    const expensesResult = await query(selectSql, [req.user.id, cutoffDateStr]);
+    const expensesToDelete = isPostgres ? expensesResult.rows : expensesResult;
+
+    let backupFileName = null;
+    let driveBackupSuccess = false;
+    let driveFileId = null;
+    let driveError = null;
+
+    if (expensesToDelete && expensesToDelete.length > 0) {
+      // Determinar a data de início (mais antiga) e data de fim (mais recente) dos dados eliminados
+      const rawStart = expensesToDelete[0].debit_date;
+      const rawEnd = expensesToDelete[expensesToDelete.length - 1].debit_date;
+      const startStr = typeof rawStart === 'string' ? rawStart.split('T')[0] : new Date(rawStart).toISOString().split('T')[0];
+      const endStr = typeof rawEnd === 'string' ? rawEnd.split('T')[0] : new Date(rawEnd).toISOString().split('T')[0];
+
+      // Nome do ficheiro conforme pedido: deleted com data de fim e data de inicio
+      backupFileName = `deleted_inicio_${startStr}_fim_${endStr}.json`;
+
+      // Obter settings do utilizador para contexto completo
+      const settingsSql = isPostgres
+        ? 'SELECT * FROM settings WHERE user_id = $1'
+        : 'SELECT * FROM settings WHERE user_id = ?';
+      const userSettings = await queryOne(settingsSql, [req.user.id]);
+
+      const backupData = JSON.stringify({
+        format_version: 1,
+        type: 'deleted_expenses_cleanup',
+        cleanup_years: yearsNum,
+        start_date: startStr,
+        end_date: endStr,
+        exported_at: new Date().toISOString(),
+        user_id: req.user.id,
+        deleted_count: expensesToDelete.length,
+        expenses: expensesToDelete,
+        settings: userSettings
+      }, null, 2);
+
+      // Verificar se o utilizador ou algum administrador tem o Google Drive associado
+      const userSql = isPostgres
+        ? 'SELECT google_refresh_token FROM users WHERE id = $1'
+        : 'SELECT google_refresh_token FROM users WHERE id = ?';
+      let userRes = await queryOne(userSql, [req.user.id]);
+      let refreshToken = userRes?.google_refresh_token;
+
+      if (!refreshToken) {
+        // Fallback: verificar se existe algum admin com token associado
+        const adminTokenSql = isPostgres
+          ? "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1"
+          : "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1";
+        const adminRes = await queryOne(adminTokenSql, []);
+        refreshToken = adminRes?.google_refresh_token;
+      }
+
+      if (refreshToken) {
+        try {
+          const { uploadBackup } = require('../services/googleDriveService');
+          driveFileId = await uploadBackup(refreshToken, backupData, backupFileName, 'eliminados');
+          driveBackupSuccess = true;
+          console.log(`Backup automático de eliminados gravado no Google Drive: ${backupFileName} (ID: ${driveFileId})`);
+        } catch (gErr) {
+          console.error('Erro ao enviar backup automático para o Google Drive:', gErr);
+          driveError = gErr.message;
+        }
+      } else {
+        console.warn('Google Drive não está associado. O backup automático para o Drive não pôde ser enviado.');
+      }
+    }
+
+    // 2. Apagar os registos antigos da base de dados
     const deleteSql = isPostgres
       ? 'DELETE FROM expenses WHERE user_id = $1 AND debit_date < $2'
       : 'DELETE FROM expenses WHERE user_id = ? AND debit_date < ?';
     const result = await run(deleteSql, [req.user.id, cutoffDateStr]);
 
     res.json({
-      message: `Deleted ${result.changes} expenses older than ${yearsNum} years`,
+      message: `Foram apagados ${result.changes} registos anteriores a ${cutoffDateStr}`,
       deletedCount: result.changes,
-      cutoffDate: cutoffDateStr
+      cutoffDate: cutoffDateStr,
+      fileName: backupFileName,
+      driveBackup: driveBackupSuccess,
+      driveFileId: driveFileId,
+      driveError: driveError
     });
   } catch (error) {
     console.error('Cleanup expenses error:', error);
@@ -385,6 +461,116 @@ router.get('/expenses/cleanup/stats', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Get cleanup stats error:', error);
     res.status(500).json({ error: 'Failed to get cleanup statistics' });
+  }
+});
+
+// ==========================================
+// CONSULTA DE BACKUPS (APENAS LEITURA / ADMIN)
+// ==========================================
+
+// Listar backups disponíveis no Google Drive (eliminados, semanais, mensais)
+router.get('/backups/google', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const userSql = isPostgres
+      ? 'SELECT google_refresh_token FROM users WHERE id = $1'
+      : 'SELECT google_refresh_token FROM users WHERE id = ?';
+    let userRes = await queryOne(userSql, [req.user.id]);
+    let refreshToken = userRes?.google_refresh_token;
+
+    if (!refreshToken) {
+      const adminTokenSql = isPostgres
+        ? "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1"
+        : "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1";
+      const adminRes = await queryOne(adminTokenSql, []);
+      refreshToken = adminRes?.google_refresh_token;
+    }
+
+    if (!refreshToken) {
+      return res.json({ connected: false, files: [] });
+    }
+
+    const { listBackups } = require('../services/googleDriveService');
+    const files = await listBackups(refreshToken);
+    res.json({ connected: true, files });
+  } catch (error) {
+    console.error('Erro ao listar backups do Google Drive:', error);
+    res.status(500).json({ error: 'Falha ao listar backups do Google Drive' });
+  }
+});
+
+// Descarregar conteúdo de um backup do Google Drive para visualização (Apenas Leitura)
+router.get('/backups/google/:fileId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    if (!fileId) {
+      return res.status(400).json({ error: 'ID do ficheiro é obrigatório' });
+    }
+
+    const userSql = isPostgres
+      ? 'SELECT google_refresh_token FROM users WHERE id = $1'
+      : 'SELECT google_refresh_token FROM users WHERE id = ?';
+    let userRes = await queryOne(userSql, [req.user.id]);
+    let refreshToken = userRes?.google_refresh_token;
+
+    if (!refreshToken) {
+      const adminTokenSql = isPostgres
+        ? "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1"
+        : "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1";
+      const adminRes = await queryOne(adminTokenSql, []);
+      refreshToken = adminRes?.google_refresh_token;
+    }
+
+    if (!refreshToken) {
+      return res.status(400).json({ error: 'Google Drive não está associado.' });
+    }
+
+    const { downloadBackup } = require('../services/googleDriveService');
+    const backupContent = await downloadBackup(refreshToken, fileId);
+
+    res.json({ success: true, backup: backupContent });
+  } catch (error) {
+    console.error('Erro ao descarregar backup do Google Drive:', error);
+    res.status(500).json({ error: 'Falha ao descarregar backup para visualização' });
+  }
+});
+
+// Obter snapshot da base de dados atual de um utilizador para visualização (Apenas Leitura)
+router.get('/backups/user-current/:targetUserId?', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const targetUserId = parseInt(req.params.targetUserId || req.query.targetUserId || req.user.id, 10);
+    const isPrivateAdmin = req.user?.role === 'admin_private';
+
+    const expensesSql = isPostgres
+      ? `SELECT * FROM expenses WHERE user_id = $1 ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY debit_date DESC`
+      : `SELECT * FROM expenses WHERE user_id = ? ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY debit_date DESC`;
+    const expensesResult = await query(expensesSql, [targetUserId]);
+    const expenses = isPostgres ? expensesResult.rows : expensesResult;
+
+    const settingsSql = isPostgres
+      ? 'SELECT * FROM settings WHERE user_id = $1'
+      : 'SELECT * FROM settings WHERE user_id = ?';
+    const settings = await queryOne(settingsSql, [targetUserId]);
+
+    const userSql = isPostgres
+      ? 'SELECT id, email, role, status FROM users WHERE id = $1'
+      : 'SELECT id, email, role, status FROM users WHERE id = ?';
+    const targetUser = await queryOne(userSql, [targetUserId]);
+
+    res.json({
+      success: true,
+      backup: {
+        format_version: 1,
+        type: 'current_system_snapshot',
+        exported_at: new Date().toISOString(),
+        user_id: targetUserId,
+        user_email: targetUser?.email,
+        expenses: expenses || [],
+        settings: settings || {}
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao obter snapshot de utilizador:', error);
+    res.status(500).json({ error: 'Falha ao obter dados para visualização' });
   }
 });
 
