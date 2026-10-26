@@ -304,23 +304,61 @@ router.delete('/users/:userId', authenticateToken, requireAdmin, async (req, res
   }
 });
 
+// Helper to resolve Google Refresh Token (from user, admin, or any user who connected Drive)
+async function resolveGoogleRefreshToken(userId) {
+  try {
+    const parsedId = parseInt(userId, 10);
+    const userSql = isPostgres
+      ? 'SELECT google_refresh_token FROM users WHERE id = $1'
+      : 'SELECT google_refresh_token FROM users WHERE id = ?';
+    let userRes = await queryOne(userSql, [isNaN(parsedId) ? userId : parsedId]);
+    let refreshToken = userRes?.google_refresh_token;
+
+    if (refreshToken && refreshToken.trim()) {
+      return refreshToken.trim();
+    }
+
+    // Fallback 1: Admin user with refresh token
+    const adminTokenSql = isPostgres
+      ? "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND TRIM(google_refresh_token) != '' AND (role = 'admin' OR role = 'admin_private') ORDER BY id ASC LIMIT 1"
+      : "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND TRIM(google_refresh_token) != '' AND (role = 'admin' OR role = 'admin_private') ORDER BY id ASC LIMIT 1";
+    const adminRes = await queryOne(adminTokenSql, []);
+    if (adminRes?.google_refresh_token && adminRes.google_refresh_token.trim()) {
+      return adminRes.google_refresh_token.trim();
+    }
+
+    // Fallback 2: Any user in the system with refresh token
+    const anyUserSql = isPostgres
+      ? "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND TRIM(google_refresh_token) != '' ORDER BY id ASC LIMIT 1"
+      : "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND TRIM(google_refresh_token) != '' ORDER BY id ASC LIMIT 1";
+    const anyUserRes = await queryOne(anyUserSql, []);
+    if (anyUserRes?.google_refresh_token && anyUserRes.google_refresh_token.trim()) {
+      return anyUserRes.google_refresh_token.trim();
+    }
+  } catch (err) {
+    console.warn('Erro ao resolver token do Google Drive:', err.message);
+  }
+  return null;
+}
+
 // Delete old expenses with automatic backup to Google Drive
 router.delete('/expenses/cleanup', authenticateToken, async (req, res) => {
   try {
     const { years } = req.query;
 
-    if (!years || isNaN(years)) {
-      return res.status(400).json({ error: 'Years parameter is required' });
+    if (!years || isNaN(Number(years))) {
+      return res.status(400).json({ error: 'Parâmetro de anos é obrigatório' });
     }
 
-    const yearsNum = parseInt(years);
-    if (yearsNum < 1 || yearsNum > 10) {
-      return res.status(400).json({ error: 'Years must be between 1 and 10' });
+    const yearsNum = parseFloat(years);
+    if (isNaN(yearsNum) || yearsNum < 1 || yearsNum > 10) {
+      return res.status(400).json({ error: 'Anos deve ser entre 1 e 10' });
     }
 
-    // Calculate cutoff date
+    // Calcular data limite com base nos meses para permitir anos fracionários (ex: 1.5 = 18 meses)
+    const monthsNum = Math.round(yearsNum * 12);
     const cutoffDate = new Date();
-    cutoffDate.setFullYear(cutoffDate.getFullYear() - yearsNum);
+    cutoffDate.setMonth(cutoffDate.getMonth() - monthsNum);
     const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
 
     // 1. Obter os registos que vão ser apagados antes de qualquer eliminação
@@ -364,21 +402,8 @@ router.delete('/expenses/cleanup', authenticateToken, async (req, res) => {
         settings: userSettings
       }, null, 2);
 
-      // Verificar se o utilizador ou algum administrador tem o Google Drive associado
-      const userSql = isPostgres
-        ? 'SELECT google_refresh_token FROM users WHERE id = $1'
-        : 'SELECT google_refresh_token FROM users WHERE id = ?';
-      let userRes = await queryOne(userSql, [req.user.id]);
-      let refreshToken = userRes?.google_refresh_token;
-
-      if (!refreshToken) {
-        // Fallback: verificar se existe algum admin com token associado
-        const adminTokenSql = isPostgres
-          ? "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1"
-          : "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1";
-        const adminRes = await queryOne(adminTokenSql, []);
-        refreshToken = adminRes?.google_refresh_token;
-      }
+      // Obter token de forma robusta
+      const refreshToken = await resolveGoogleRefreshToken(req.user.id);
 
       if (refreshToken) {
         try {
@@ -421,13 +446,14 @@ router.get('/expenses/cleanup/stats', authenticateToken, async (req, res) => {
   try {
     const { years } = req.query;
 
-    if (!years || isNaN(years)) {
+    if (!years || isNaN(Number(years))) {
       return res.status(400).json({ error: 'Years parameter is required' });
     }
 
-    const yearsNum = parseInt(years);
+    const yearsNum = parseFloat(years);
+    const monthsNum = Math.round(yearsNum * 12);
     const cutoffDate = new Date();
-    cutoffDate.setFullYear(cutoffDate.getFullYear() - yearsNum);
+    cutoffDate.setMonth(cutoffDate.getMonth() - monthsNum);
     const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
 
     // Count expenses that would be deleted
@@ -471,19 +497,7 @@ router.get('/expenses/cleanup/stats', authenticateToken, async (req, res) => {
 // Listar backups disponíveis no Google Drive (eliminados, semanais, mensais)
 router.get('/backups/google', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const userSql = isPostgres
-      ? 'SELECT google_refresh_token FROM users WHERE id = $1'
-      : 'SELECT google_refresh_token FROM users WHERE id = ?';
-    let userRes = await queryOne(userSql, [req.user.id]);
-    let refreshToken = userRes?.google_refresh_token;
-
-    if (!refreshToken) {
-      const adminTokenSql = isPostgres
-        ? "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1"
-        : "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1";
-      const adminRes = await queryOne(adminTokenSql, []);
-      refreshToken = adminRes?.google_refresh_token;
-    }
+    const refreshToken = await resolveGoogleRefreshToken(req.user.id);
 
     if (!refreshToken) {
       return res.json({ connected: false, files: [] });
@@ -494,7 +508,7 @@ router.get('/backups/google', authenticateToken, requireAdmin, async (req, res) 
     res.json({ connected: true, files });
   } catch (error) {
     console.error('Erro ao listar backups do Google Drive:', error);
-    res.status(500).json({ error: 'Falha ao listar backups do Google Drive' });
+    res.status(500).json({ error: 'Falha ao listar backups do Google Drive: ' + error.message, connected: true });
   }
 });
 
@@ -506,19 +520,7 @@ router.get('/backups/google/:fileId', authenticateToken, requireAdmin, async (re
       return res.status(400).json({ error: 'ID do ficheiro é obrigatório' });
     }
 
-    const userSql = isPostgres
-      ? 'SELECT google_refresh_token FROM users WHERE id = $1'
-      : 'SELECT google_refresh_token FROM users WHERE id = ?';
-    let userRes = await queryOne(userSql, [req.user.id]);
-    let refreshToken = userRes?.google_refresh_token;
-
-    if (!refreshToken) {
-      const adminTokenSql = isPostgres
-        ? "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1"
-        : "SELECT google_refresh_token FROM users WHERE google_refresh_token IS NOT NULL AND (role = 'admin' OR role = 'admin_private') LIMIT 1";
-      const adminRes = await queryOne(adminTokenSql, []);
-      refreshToken = adminRes?.google_refresh_token;
-    }
+    const refreshToken = await resolveGoogleRefreshToken(req.user.id);
 
     if (!refreshToken) {
       return res.status(400).json({ error: 'Google Drive não está associado.' });
@@ -530,7 +532,7 @@ router.get('/backups/google/:fileId', authenticateToken, requireAdmin, async (re
     res.json({ success: true, backup: backupContent });
   } catch (error) {
     console.error('Erro ao descarregar backup do Google Drive:', error);
-    res.status(500).json({ error: 'Falha ao descarregar backup para visualização' });
+    res.status(500).json({ error: 'Falha ao descarregar backup para visualização: ' + error.message });
   }
 });
 

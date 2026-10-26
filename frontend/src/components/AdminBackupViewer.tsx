@@ -70,6 +70,15 @@ interface BackupData {
   settings?: any;
 }
 
+
+const formatCleanupYears = (val?: number | string) => {
+  if (!val) return 'Desativada';
+  const num = Number(val);
+  if (num === 1.5) return '1 ano e 6 meses (18 meses)';
+  if (num === 1) return '1 ano';
+  return `${num} anos`;
+};
+
 export function AdminBackupViewer() {
   const toast = useToast();
   const { user } = useAuth();
@@ -79,6 +88,24 @@ export function AdminBackupViewer() {
   const [googleFiles, setGoogleFiles] = useState<GoogleDriveBackupFile[]>([]);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+
+  const handleConnectGoogle = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/google/url', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error('Não foi possível obter o endereço de autenticação Google.');
+      }
+    } catch (e) {
+      toast.error('Erro ao iniciar ligação com o Google Drive.');
+    }
+  };
   
   // Backup carregado para visualização em memória
   const [selectedBackup, setSelectedBackup] = useState<BackupData | null>(null);
@@ -107,14 +134,24 @@ export function AdminBackupViewer() {
 
   const loadGoogleBackups = async () => {
     setLoadingGoogle(true);
+    setGoogleError(null);
     try {
       const res = await adminAPI.getGoogleBackups();
       setGoogleConnected(res.data.connected);
       setGoogleFiles(res.data.files || []);
+      if (!res.data.connected) {
+        setGoogleError(null);
+      }
     } catch (err: any) {
       console.error('Erro ao carregar ficheiros do Google Drive:', err);
-      setGoogleConnected(false);
-      toast.error('Não foi possível aceder aos ficheiros do Google Drive');
+      if (err.response?.data?.connected === false) {
+        setGoogleConnected(false);
+        setGoogleError(null);
+      } else {
+        const errorMsg = err.response?.data?.error || err.message || 'Falha ao aceder ao Google Drive';
+        setGoogleError(errorMsg);
+      }
+      toast.error('Erro ao aceder aos ficheiros do Google Drive');
     } finally {
       setLoadingGoogle(false);
     }
@@ -420,20 +457,61 @@ export function AdminBackupViewer() {
                     <RefreshCw className="w-6 h-6 animate-spin text-primary-600" />
                     <span>A pesquisar backups no Google Drive...</span>
                   </div>
+                ) : googleError ? (
+                  <div className="p-6 text-center rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 space-y-3">
+                    <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
+                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                      Ocorreu um erro ao consultar os ficheiros no Google Drive
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 max-w-md mx-auto">
+                      {googleError}
+                    </p>
+                    <div className="flex justify-center gap-2 pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={loadGoogleBackups}
+                        className="text-xs"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                        Tentar Novamente
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleConnectGoogle}
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        <Cloud className="w-3.5 h-3.5 mr-1.5" />
+                        Reconectar Conta Google
+                      </Button>
+                    </div>
+                  </div>
                 ) : googleConnected === false ? (
-                  <div className="p-6 text-center rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-800 space-y-2">
+                  <div className="p-6 text-center rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-800 space-y-3">
                     <Cloud className="w-10 h-10 text-gray-400 mx-auto" />
                     <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                       O Google Drive não está associado nesta conta.
                     </p>
                     <p className="text-xs text-gray-500 max-w-md mx-auto">
-                      Pode associar o Google Drive no separador "Aplicação/Dados" das Definições ou utilizar a aba "Carregar Ficheiro JSON" para inspecionar ficheiros salvos no seu computador.
+                      Pode ligar a sua conta Google Drive diretamente aqui ou aceder ao separador "Dados" nas Definições.
                     </p>
+                    <div className="pt-1">
+                      <Button
+                        type="button"
+                        onClick={handleConnectGoogle}
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        <Cloud className="w-4 h-4 mr-1.5" />
+                        Ligar Google Drive Agora
+                      </Button>
+                    </div>
                   </div>
                 ) : googleFiles.length === 0 ? (
                   <div className="py-10 text-center rounded-xl bg-gray-50 dark:bg-gray-800/40 border border-dashed border-gray-200 dark:border-gray-800 text-sm text-gray-400 space-y-1">
                     <p className="font-semibold text-gray-600 dark:text-gray-300">Nenhum ficheiro de backup encontrado no Google Drive.</p>
-                    <p className="text-xs">Os backups automáticos semanais, mensais ou de eliminados aparecerão aqui assim que forem executados.</p>
+                    <p className="text-xs">A conta Google Drive está associada com sucesso. Os backups automáticos semanais, mensais ou de eliminados aparecerão aqui assim que forem executados.</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -596,7 +674,7 @@ export function AdminBackupViewer() {
             <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 flex items-center gap-2.5 text-xs text-amber-900 dark:text-amber-200">
               <span className="text-base">🚨</span>
               <div className="flex-1">
-                <strong>Cópia de Segurança de Registos Eliminados:</strong> Estes dados foram salvaguardados automaticamente antes da limpeza de {selectedBackup.cleanup_years || ''} anos.
+                <strong>Cópia de Segurança de Registos Eliminados:</strong> Estes dados foram salvaguardados automaticamente antes da limpeza de {formatCleanupYears(selectedBackup.cleanup_years)}.
                 {selectedBackup.start_date && selectedBackup.end_date && (
                   <span> Período abrangido: <strong>{selectedBackup.start_date}</strong> a <strong>{selectedBackup.end_date}</strong>.</span>
                 )}
@@ -676,7 +754,7 @@ export function AdminBackupViewer() {
                   <div><strong>Lembrete Valores Variáveis:</strong> {selectedBackup.settings.variable_reminder_enabled ? 'Ativo' : 'Inativo'} (dia {selectedBackup.settings.variable_reminder_day || 21})</div>
                   <div><strong>Notificações Globais:</strong> {selectedBackup.settings.notifications_enabled ? 'Ativas' : 'Inativas'}</div>
                   <div><strong>Backup Google Drive:</strong> {selectedBackup.settings.drive_backup_enabled ? 'Ativo' : 'Inativo'}</div>
-                  <div><strong>Limpeza Automática:</strong> {selectedBackup.settings.auto_cleanup_years ? `${selectedBackup.settings.auto_cleanup_years} anos` : 'Desativada'}</div>
+                  <div><strong>Limpeza Automática:</strong> {formatCleanupYears(selectedBackup.settings.auto_cleanup_years)}</div>
                 </div>
               )}
             </div>

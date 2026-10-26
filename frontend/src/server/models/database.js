@@ -238,7 +238,12 @@ async function initializeDatabase() {
       'ALTER TABLE settings ADD COLUMN IF NOT EXISTS no_value_reminder_enabled INTEGER DEFAULT 0;',
       'ALTER TABLE settings ADD COLUMN IF NOT EXISTS no_value_reminder_days VARCHAR(50) DEFAULT \'1,10,15,20\';',
       'ALTER TABLE settings ADD COLUMN IF NOT EXISTS backup_reminder_enabled INTEGER DEFAULT 1;',
-      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS backup_reminder_day INTEGER DEFAULT 21;'
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS backup_reminder_day INTEGER DEFAULT 21;',
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS drive_backup_enabled INTEGER DEFAULT 0;',
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS auto_cleanup_years NUMERIC(4,2) DEFAULT 0;',
+      'ALTER TABLE users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;',
+      'ALTER TABLE users ALTER COLUMN google_refresh_token TYPE TEXT;',
+      'ALTER TABLE settings ALTER COLUMN auto_cleanup_years TYPE NUMERIC(4,2);'
     ];
 
     for (const sql of individualMigrations) {

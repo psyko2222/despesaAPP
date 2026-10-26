@@ -99,8 +99,8 @@ async function listBackups(refreshToken) {
   oauth2Client.setCredentials({ refresh_token: refreshToken });
   const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
-  // Obter ou verificar a pasta principal
-  const parentFolderQuery = `mimeType='application/vnd.google-apps.folder' and name='${PARENT_FOLDER_NAME}' and trashed=false`;
+  // 1. Obter ou verificar a pasta principal
+  const parentFolderQuery = `mimeType = 'application/vnd.google-apps.folder' and name = '${PARENT_FOLDER_NAME}' and trashed = false`;
   const parentRes = await drive.files.list({ q: parentFolderQuery, spaces: 'drive', fields: 'files(id, name)' });
 
   if (!parentRes.data.files || parentRes.data.files.length === 0) {
@@ -109,38 +109,50 @@ async function listBackups(refreshToken) {
 
   const parentFolderId = parentRes.data.files[0].id;
 
-  // Listar todas as subpastas dentro da pasta principal (ex: eliminados, semanal, mensal)
-  const subfoldersQuery = `'${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  // 2. Listar todas as subpastas dentro da pasta principal (ex: eliminados, semanal, mensal)
+  const subfoldersQuery = `'${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
   const subfoldersRes = await drive.files.list({ q: subfoldersQuery, spaces: 'drive', fields: 'files(id, name)' });
   const subfolders = subfoldersRes.data.files || [];
 
-  const folderNames = { [parentFolderId]: 'Geral' };
-  subfolders.forEach(sf => {
-    folderNames[sf.id] = sf.name;
-  });
+  const foldersToSearch = [
+    { id: parentFolderId, name: 'Geral' },
+    ...subfolders.map(sf => ({ id: sf.id, name: sf.name }))
+  ];
 
-  const allFolderIds = [parentFolderId, ...subfolders.map(sf => sf.id)];
-  const parentConditions = allFolderIds.map(id => `'${id}' in parents`).join(' or ');
-  const filesQuery = `(${parentConditions}) and mimeType != 'application/vnd.google-apps.folder' and trashed=false`;
+  // 3. Pesquisar ficheiros em cada pasta sem filtros de mimeType problematicos no Drive API
+  const allFiles = [];
+  for (const folder of foldersToSearch) {
+    try {
+      const q = `'${folder.id}' in parents and trashed = false`;
+      const res = await drive.files.list({
+        q,
+        spaces: 'drive',
+        orderBy: 'createdTime desc',
+        fields: 'files(id, name, mimeType, parents, size, createdTime, modifiedTime)',
+        pageSize: 100
+      });
 
-  const filesRes = await drive.files.list({
-    q: filesQuery,
-    spaces: 'drive',
-    orderBy: 'createdTime desc',
-    fields: 'files(id, name, parents, size, createdTime, modifiedTime)'
-  });
+      const folderFiles = (res.data.files || [])
+        .filter(f => f.mimeType !== 'application/vnd.google-apps.folder')
+        .map(f => ({
+          id: f.id,
+          name: f.name,
+          folder: folder.name,
+          size: f.size ? parseInt(f.size, 10) : 0,
+          createdTime: f.createdTime,
+          modifiedTime: f.modifiedTime
+        }));
 
-  return (filesRes.data.files || []).map(f => {
-    const parentId = f.parents ? f.parents[0] : null;
-    return {
-      id: f.id,
-      name: f.name,
-      folder: folderNames[parentId] || 'Geral',
-      size: f.size ? parseInt(f.size, 10) : 0,
-      createdTime: f.createdTime,
-      modifiedTime: f.modifiedTime
-    };
-  });
+      allFiles.push(...folderFiles);
+    } catch (fErr) {
+      console.warn(`Aviso ao listar ficheiros na pasta Google Drive "${folder.name}":`, fErr.message);
+    }
+  }
+
+  // Ordenar por data mais recente primeiro
+  allFiles.sort((a, b) => new Date(b.createdTime || 0).getTime() - new Date(a.createdTime || 0).getTime());
+
+  return allFiles;
 }
 
 async function downloadBackup(refreshToken, fileId) {

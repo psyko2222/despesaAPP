@@ -30,7 +30,7 @@ export function SettingsScreen() {
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [cleanupYears, setCleanupYears] = useState(2);
+  const [cleanupYears, setCleanupYears] = useState(1.5);
   const [cleanupStats, setCleanupStats] = useState<any>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupDeleting, setCleanupDeleting] = useState(false);
@@ -134,7 +134,7 @@ export function SettingsScreen() {
       }
       setSettings(data);
       if (response.data.auto_cleanup_years) {
-        setCleanupYears(response.data.auto_cleanup_years);
+        setCleanupYears(Number(response.data.auto_cleanup_years));
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -810,7 +810,7 @@ export function SettingsScreen() {
                   <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                     Pode instalar esta aplicação no seu <strong>PC (Windows/Mac)</strong> ou <strong>Telemóvel (Android/iPhone)</strong> para que abra numa janela própria, sem a barra do navegador, com o seu próprio ícone no ambiente de trabalho ou menu iniciar.
                   </p>
-                  
+
                   <div className="flex flex-wrap gap-2 pt-1">
                     {installPrompt && (
                       <Button
@@ -845,7 +845,7 @@ export function SettingsScreen() {
             <CardTitle>Dados</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            
+
               <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2 mt-4">Backup (Google Drive)</h3>
               {/* 6º Backup Automático Google Drive */}
               <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
@@ -881,14 +881,14 @@ export function SettingsScreen() {
                 <p className="text-xs text-gray-500 dark:text-gray-400 pl-6">
                   Guarda automaticamente uma cópia de segurança na tua conta Google Drive todas as semanas e no dia 21. Mantém sempre os últimos 2 backups semanais.
                 </p>
-                
+
                 {(settings.drive_backup_enabled ?? 0) === 1 && (
                   <div className="pl-6 pt-1">
-                     <button 
+                     <button
                        onClick={() => {
-                          fetch('/api/google/disconnect', { 
-                            method: 'POST', 
-                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } 
+                          fetch('/api/google/disconnect', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                           }).then(() => setSettings({ ...settings, drive_backup_enabled: 0 }));
                        }}
                        className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 font-medium bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 px-2 py-1 rounded transition-colors"
@@ -898,7 +898,7 @@ export function SettingsScreen() {
                   </div>
                 )}
               </div>
-              
+
               <div className="flex gap-2 mt-2 mb-4">
                  <Button onClick={() => handleDriveBackup('semanal')} disabled={exporting} className="w-full text-xs" variant="outline">
                     Gerar Backup Semanal
@@ -1055,19 +1055,28 @@ export function SettingsScreen() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-gray-700 dark:text-gray-300 mb-1">Apagar registos com mais de (anos):</label>
-              <div className="flex space-x-2">
-                {[2, 3, 4, 5].map((years) => (
+              <label className="block text-gray-700 dark:text-gray-300 mb-2 font-medium">
+                Apagar registos com mais de:
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: 1.5, label: '1 ano e 6 meses' },
+                  { value: 2, label: '2 anos' },
+                  { value: 3, label: '3 anos' },
+                  { value: 4, label: '4 anos' },
+                  { value: 5, label: '5 anos' },
+                ].map((option) => (
                   <Button
-                    key={years}
+                    key={option.value}
                     type="button"
-                    variant={cleanupYears === years ? "default" : "outline"}
+                    variant={cleanupYears === option.value ? "default" : "outline"}
                     onClick={() => {
-                      setCleanupYears(years);
+                      setCleanupYears(option.value);
                       setCleanupStats(null);
                     }}
+                    className="text-xs sm:text-sm"
                   >
-                    {years} anos
+                    {option.label}
                   </Button>
                 ))}
               </div>
@@ -1075,7 +1084,15 @@ export function SettingsScreen() {
 
             <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-4 rounded-xl space-y-2">
               <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                Vão ser apagados todos os registos anteriores a {new Date(new Date().setFullYear(new Date().getFullYear() - cleanupYears)).getFullYear()}.
+                Vão ser apagados todos os registos anteriores a {(() => {
+                  const d = new Date();
+                  d.setMonth(d.getMonth() - Math.round(cleanupYears * 12));
+                  return d.toLocaleDateString('pt-PT');
+                })()} ({
+                  cleanupYears === 1.5 
+                    ? 'com mais de 1 ano e 6 meses / 18 meses' 
+                    : `com mais de ${cleanupYears} anos`
+                }).
               </p>
               <p className="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-1.5 leading-relaxed">
                 <span>☁️</span>

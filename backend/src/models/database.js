@@ -327,6 +327,24 @@ async function initializeDatabase() {
     `);
 
     await client.query('COMMIT');
+
+    const individualMigrations = [
+      'ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_private INTEGER DEFAULT 0;',
+      'ALTER TABLE savings ADD COLUMN IF NOT EXISTS is_private INTEGER DEFAULT 0;',
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS drive_backup_enabled INTEGER DEFAULT 0;',
+      'ALTER TABLE settings ADD COLUMN IF NOT EXISTS auto_cleanup_years NUMERIC(4,2) DEFAULT 0;',
+      'ALTER TABLE users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;',
+      'ALTER TABLE users ALTER COLUMN google_refresh_token TYPE TEXT;',
+      'ALTER TABLE settings ALTER COLUMN auto_cleanup_years TYPE NUMERIC(4,2);'
+    ];
+
+    for (const sql of individualMigrations) {
+      try {
+        await client.query(sql);
+      } catch (colErr) {
+        console.warn('Migration column warning:', colErr.message);
+      }
+    }
     console.log('PostgreSQL Database initialized successfully');
   } catch (error) {
     await client.query('ROLLBACK');

@@ -42,6 +42,9 @@ router.get('/', authenticateToken, async (req, res) => {
       return res.json(newSettings);
     }
 
+    if (settings && settings.auto_cleanup_years !== undefined && settings.auto_cleanup_years !== null) {
+      settings.auto_cleanup_years = parseFloat(settings.auto_cleanup_years);
+    }
     res.json(settings);
   } catch (error) {
     console.error('Get settings error:', error);
@@ -171,7 +174,7 @@ router.put('/', authenticateToken, async (req, res) => {
     }
     if (auto_cleanup_years !== undefined) {
       updates.push(isPostgres ? `auto_cleanup_years = $${paramIndex++}` : `auto_cleanup_years = ?`);
-      params.push(auto_cleanup_years);
+      params.push(auto_cleanup_years !== null ? parseFloat(auto_cleanup_years) : 0);
     }
     if (stats_comparison !== undefined) {
       updates.push(isPostgres ? `stats_comparison = $${paramIndex++}` : `stats_comparison = ?`);
