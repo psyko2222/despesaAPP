@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [newPassword, setNewPassword] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [resetToken, setResetToken] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -44,9 +45,16 @@ export default function LoginPage() {
         });
     }
 
-    const resetParam = urlParams.get('reset') || urlParams.get('mode');
+    const resetParam = urlParams.get('reset');
+    const modeParam = urlParams.get('mode');
     const emailParam = urlParams.get('email');
-    if (resetParam === 'reset' || urlParams.has('reset')) {
+    if (resetParam) {
+      setMode('reset');
+      if (resetParam !== 'reset') {
+        setResetToken(resetParam);
+      }
+      if (emailParam) setResetEmail(emailParam);
+    } else if (modeParam === 'reset') {
       setMode('reset');
       if (emailParam) setResetEmail(emailParam);
     }
@@ -79,7 +87,7 @@ export default function LoginPage() {
         setMode('login');
       } else if (mode === 'forgot') {
         const response = await authAPI.forgotPassword(email);
-        setSuccess(response.data.message || 'Aguarde a redefinição pelo administrador.');
+        setSuccess(response.data.message || 'Link de recuperação enviado para o seu email.');
         setEmail('');
       } else if (mode === 'reset') {
         if (newPassword !== resetConfirmPassword) {
@@ -87,8 +95,14 @@ export default function LoginPage() {
           setLoading(false);
           return;
         }
-        await authAPI.resetPasswordDirect(resetEmail, newPassword, resetConfirmPassword);
-        setSuccess('Password redefinida com sucesso!');
+        if (resetToken) {
+          const response = await authAPI.resetPassword(resetToken, newPassword);
+          setSuccess(response.data.message || 'Password redefinida com sucesso! Já pode entrar.');
+          setResetToken('');
+        } else {
+          await authAPI.resetPasswordDirect(resetEmail, newPassword, resetConfirmPassword);
+          setSuccess('Password redefinida com sucesso! Já pode entrar.');
+        }
         setResetEmail('');
         setNewPassword('');
         setResetConfirmPassword('');
@@ -138,7 +152,7 @@ export default function LoginPage() {
                 />
               </div>
             )}
-            {mode === 'reset' && (
+            {mode === 'reset' && !resetToken && (
               <div>
                 <label htmlFor="resetEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Email
@@ -299,7 +313,7 @@ export default function LoginPage() {
               {loading ? 'A processar...' :
                mode === 'login' ? 'Entrar' :
                mode === 'register' ? 'Registar' :
-               mode === 'forgot' ? 'Pedir Reset' :
+               mode === 'forgot' ? 'Enviar Link de Recuperação' :
                'Redefinir Password'}
             </Button>
           </form>
@@ -329,18 +343,7 @@ export default function LoginPage() {
                 >
                   Esqueceu a password?
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('reset');
-                    setError('');
-                    setSuccess('');
-                    setResetEmail('');
-                  }}
-                  className="block text-primary-600 hover:text-primary-700 text-sm"
-                >
-                  Redefinir password (com aprovação)
-                </button>
+
               </>
             )}
             {mode === 'register' && (
