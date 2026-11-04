@@ -4,7 +4,14 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { db, isPostgres, query, queryOne, run, transaction } = require('../models/database');
 const { authenticateToken, generateToken } = require('../middleware/auth');
-const { sendPasswordResetEmail, sendUserApprovalNotification, isEmailConfigured } = require('../services/emailService');
+const { 
+  sendPasswordResetEmail, 
+  sendUserApprovalNotification, 
+  sendUserApprovedConfirmation,
+  sendPasswordResetRequestNotification,
+  sendPasswordResetApprovedNotification,
+  isEmailConfigured 
+} = require('../services/emailService');
 const { logError } = require('../services/logger');
 
 function normalizeEmail(email) {
@@ -313,6 +320,11 @@ router.post('/approve/:token', async (req, res) => {
       ? (await db.query(userQuery, [approvalToken.user_id])).rows[0]
       : db.prepare(userQuery).get(approvalToken.user_id);
 
+    if (isEmailConfigured() && user?.email) {
+      const frontendUrl = process.env.FRONTEND_URL || 'https://despesa-app.vercel.app';
+      sendUserApprovedConfirmation(user.email, frontendUrl).catch(e => console.error('Erro ao enviar email de aprovacao:', e));
+    }
+
     res.json({
       message: 'User approved successfully',
       user
@@ -369,6 +381,18 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     console.log(`Password reset request created for user ${user.id}, request ID: ${requestId}`);
+
+    if (isEmailConfigured()) {
+      const adminsQuery = isPostgres
+        ? "SELECT email FROM users WHERE role IN ('admin', 'admin_private') AND status = 'approved'"
+        : "SELECT email FROM users WHERE role IN ('admin', 'admin_private') AND status = 'approved'";
+      query(adminsQuery, []).then(adminsResult => {
+        const admins = isPostgres ? adminsResult.rows : adminsResult;
+        const adminEmails = (admins || []).map(a => a.email);
+        const frontendUrl = process.env.FRONTEND_URL || 'https://despesa-app.vercel.app';
+        sendPasswordResetRequestNotification(adminEmails, user.email, frontendUrl).catch(e => console.error('Erro ao notificar admin de reset:', e));
+      }).catch(e => console.error('Erro ao procurar admins para reset:', e));
+    }
 
     res.json({ message: 'Aguarde a redefinição pelo administrador.' });
   } catch (error) {
@@ -456,6 +480,18 @@ router.post('/password-reset-requests/:id/approve', authenticateToken, async (re
       await db.query(updateQuery, ['approved', new Date().toISOString(), req.user.id, requestId]);
     } else {
       db.prepare(updateQuery).run('approved', new Date().toISOString(), req.user.id, requestId);
+    }
+
+    if (isEmailConfigured()) {
+      const targetUserQuery = isPostgres
+        ? 'SELECT email FROM users WHERE id = $1'
+        : 'SELECT email FROM users WHERE id = ?';
+      queryOne(targetUserQuery, [resetRequest.user_id]).then(targetUser => {
+        if (targetUser?.email) {
+          const frontendUrl = process.env.FRONTEND_URL || 'https://despesa-app.vercel.app';
+          sendPasswordResetApprovedNotification(targetUser.email, frontendUrl).catch(e => console.error('Erro ao notificar utilizador de reset aprovado:', e));
+        }
+      }).catch(e => console.error('Erro ao procurar utilizador do reset aprovado:', e));
     }
 
     res.json({ message: 'Pedido de reset aprovado com sucesso' });

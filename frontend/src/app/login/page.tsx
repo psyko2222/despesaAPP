@@ -43,6 +43,13 @@ export default function LoginPage() {
           setError(err.response?.data?.error || 'Não foi possível aprovar o utilizador');
         });
     }
+
+    const resetParam = urlParams.get('reset') || urlParams.get('mode');
+    const emailParam = urlParams.get('email');
+    if (resetParam === 'reset' || urlParams.has('reset')) {
+      setMode('reset');
+      if (emailParam) setResetEmail(emailParam);
+    }
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -57,6 +57,12 @@ router.post('/users/:userId/approve', authenticateToken, requireAdmin, async (re
       : 'SELECT id, email FROM users WHERE id = ?';
     const user = await queryOne(userSql, [userId]);
 
+    const { isEmailConfigured, sendUserApprovedConfirmation } = require('../services/emailService');
+    if (isEmailConfigured() && user?.email) {
+      const frontendUrl = process.env.FRONTEND_URL || 'https://despesa-app.vercel.app';
+      sendUserApprovedConfirmation(user.email, frontendUrl).catch(e => console.error('Erro ao enviar confirmacao de aprovacao:', e));
+    }
+
     res.json({
       message: 'User approved successfully',
       user
