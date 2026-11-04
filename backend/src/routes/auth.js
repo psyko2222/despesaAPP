@@ -7,6 +7,7 @@ const { authenticateToken, generateToken } = require('../middleware/auth');
 const { 
   sendPasswordResetEmail, 
   sendUserApprovalNotification, 
+  sendUserRegistrationPendingNotification,
   sendUserApprovedConfirmation,
   sendPasswordResetRequestNotification,
   sendPasswordResetApprovedNotification,
@@ -108,44 +109,32 @@ router.post('/register', async (req, res) => {
     if (!isFirstUser) {
       console.log('Getting admins for notification...');
       const adminsQuery = isPostgres
-        ? 'SELECT email FROM users WHERE role = $1 AND status = $2'
-        : 'SELECT email FROM users WHERE role = ? AND status = ?';
-      const adminsResult = await query(adminsQuery, ['admin', 'approved']);
+        ? "SELECT email FROM users WHERE role IN ('admin', 'admin_private') AND status = $1"
+        : "SELECT email FROM users WHERE role IN ('admin', 'admin_private') AND status = ?";
+      const adminsResult = await query(adminsQuery, ['approved']);
       const admins = isPostgres ? adminsResult.rows : adminsResult;
-      const adminEmails = admins.map((a) => a.email);
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const adminEmails = (admins || []).map((a) => a.email);
+      const frontendUrl = process.env.FRONTEND_URL || 'https://despesa-app.vercel.app';
       console.log('Admins found:', adminEmails);
 
-      if (adminEmails.length > 0 && created.approvalToken) {
-        // Check if email is configured before trying to send
-        if (isEmailConfigured()) {
-          // Send email notification in background - don't block registration
+      if (isEmailConfigured()) {
+        // 1. Notificar os administradores de que existe um novo registo e contas para aprovar
+        if (adminEmails.length > 0 && created.approvalToken) {
           sendUserApprovalNotification(adminEmails, email, created.approvalToken, frontendUrl)
             .catch((emailError) => {
-              console.error('Failed to send approval notification:', emailError);
-              logError({
-                level: 'warning',
-                message: 'Failed to send user approval notification',
-                details: { error: emailError.message, newUserEmail: email, adminEmails },
-                route: '/auth/register',
-                method: 'POST'
-              });
+              console.error('Failed to send approval notification to admins:', emailError);
             });
-        } else {
-          console.warn('User approval notification not sent - email service not configured');
-          logError({
-            level: 'warning',
-            message: 'User approval notification not sent - email service not configured',
-            details: { newUserEmail: email, adminEmails },
-            route: '/auth/register',
-            method: 'POST'
-          });
         }
+        // 2. Enviar email de cortesia ao novo utilizador informando que a conta está suspensa a aguardar aceitação
+        sendUserRegistrationPendingNotification(email, frontendUrl)
+          .catch((emailError) => {
+            console.error('Failed to send pending notification to user:', emailError);
+          });
       }
 
       console.log('Returning pending approval response');
       return res.status(201).json({
-        message: 'Conta criada. Fica pendente de aprovação.',
+        message: 'Conta criada com sucesso! Por segurança, a conta fica suspensa até aceitação pelo administrador. Verifique o seu email e a pasta de lixo/spam.',
         requiresApproval: true,
       });
     }
@@ -195,7 +184,7 @@ router.post('/login', async (req, res) => {
 
     if (user.status !== 'approved') {
       console.log('=== DEBUG: User not approved, status ===', user.status);
-      return res.status(403).json({ error: 'A conta está pendente de aprovação' });
+      return res.status(403).json({ error: 'A conta encontra-se suspensa a aguardar aceitação pelo administrador. Verifique o seu email (e a pasta de lixo/spam).' });
     }
 
     // Verify password
@@ -397,7 +386,7 @@ router.post('/forgot-password', async (req, res) => {
         });
       }
       return res.json({ 
-        message: 'Enviámos um link para redefinir a sua password. Por favor verifique o seu email!' 
+        message: 'Enviámos um link para redefinir a sua password. Por favor verifique o seu email (e a pasta de lixo/spam)!' 
       });
     } else {
       return res.json({ 

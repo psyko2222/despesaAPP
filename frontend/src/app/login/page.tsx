@@ -78,16 +78,16 @@ export default function LoginPage() {
         }
         const result = await register(email, password);
         if (result.requiresApproval) {
-          setSuccess('Conta criada. Fica pendente de aprovação. Depois disso pode entrar.');
+          setSuccess('Conta criada com sucesso! Por segurança, a conta fica suspensa até aceitação pelo administrador. Verifique o seu email e a pasta de lixo/spam.');
         } else {
-          setSuccess('Conta criada. Pode agora entrar.');
+          setSuccess('Conta criada com sucesso! Pode agora iniciar sessão.');
         }
         setPassword('');
         setConfirmPassword('');
         setMode('login');
       } else if (mode === 'forgot') {
         const response = await authAPI.forgotPassword(email);
-        setSuccess(response.data.message || 'Link de recuperação enviado para o seu email.');
+        setSuccess(response.data.message || 'Enviámos o link de recuperação. Por favor verifique o seu email (e a pasta de lixo/spam).');
         setEmail('');
       } else if (mode === 'reset') {
         if (newPassword !== resetConfirmPassword) {
@@ -362,30 +362,17 @@ export default function LoginPage() {
               </button>
             )}
             {mode === 'forgot' && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('reset');
-                    setError('');
-                    setSuccess('');
-                  }}
-                  className="block text-primary-600 hover:text-primary-700 text-sm"
-                >
-                  Já tem aprovação? Redefinir password
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('login');
-                    setError('');
-                    setSuccess('');
-                  }}
-                  className="block text-primary-600 hover:text-primary-700 text-sm"
-                >
-                  Voltar ao login
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('login');
+                  setError('');
+                  setSuccess('');
+                }}
+                className="block text-primary-600 hover:text-primary-700 text-sm"
+              >
+                Voltar ao login
+              </button>
             )}
             {mode === 'reset' && (
               <button
@@ -400,6 +387,12 @@ export default function LoginPage() {
                 Voltar ao login
               </button>
             )}
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 text-center">
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+              📬 <strong>Dica:</strong> Verifique sempre a pasta de <em>Lixo Eletrónico / Spam</em> caso não encontre as nossas mensagens.
+            </p>
           </div>
         </CardContent>
       </Card>
