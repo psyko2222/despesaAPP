@@ -13,7 +13,9 @@ function fromAddress() {
     process.env.EMAIL_FROM ||
     'despesasnotificacao@gmail.com'
   ).trim();
-  return addr.replace(/@gmial\.com$/i, '@gmail.com');
+  const cleanAddr = addr.replace(/@gmial\.com$/i, '@gmail.com');
+  if (cleanAddr.includes('<')) return cleanAddr;
+  return `"Despesas App" <${cleanAddr}>`;
 }
 
 function isEmailConfigured() {
@@ -136,7 +138,7 @@ function renderEmailLayout({ headerColor = '#2563eb', badgeText, badgeBg = '#eff
 // 1. Notificar administradores de novo registo pendente de aprovação
 async function sendUserApprovalNotification(adminEmails, newUserEmail, approvalToken, frontendUrl) {
   const cleanUrl = (frontendUrl || 'https://despesa-app.vercel.app').replace(/\/+$/, '');
-  const approvalUrl = `${cleanUrl}/login?approve=${approvalToken}`;
+  const approvalUrl = approvalToken ? `${cleanUrl}/login?approve=${approvalToken}` : `${cleanUrl}/login`;
   const adminPanelUrl = `${cleanUrl}/login`;
   const recipients = (adminEmails || []).filter(Boolean);
 

@@ -109,8 +109,8 @@ router.post('/register', async (req, res) => {
     if (!isFirstUser) {
       console.log('Getting admins for notification...');
       const adminsQuery = isPostgres
-        ? "SELECT email FROM users WHERE role IN ('admin', 'admin_private') AND status = $1"
-        : "SELECT email FROM users WHERE role IN ('admin', 'admin_private') AND status = ?";
+        ? "SELECT email FROM users WHERE LOWER(role) IN ('admin', 'admin_private') AND LOWER(status) = LOWER($1)"
+        : "SELECT email FROM users WHERE LOWER(role) IN ('admin', 'admin_private') AND LOWER(status) = LOWER(?)";
       const adminsResult = await query(adminsQuery, ['approved']);
       const admins = isPostgres ? adminsResult.rows : adminsResult;
       let adminEmails = (admins || []).map((a) => a.email);
@@ -130,18 +130,30 @@ router.post('/register', async (req, res) => {
       console.log('Admins to notify:', adminEmails);
 
       if (isEmailConfigured()) {
-        // 1. Notificar os administradores de que existe um novo registo e contas para aprovar
-        if (adminEmails.length > 0 && created.approvalToken) {
-          sendUserApprovalNotification(adminEmails, email, created.approvalToken, frontendUrl)
-            .catch((emailError) => {
-              console.error('Failed to send approval notification to admins:', emailError);
-            });
+        try {
+          console.log(`[REGISTER] A enviar e-mails de registo... Admins: ${adminEmails.join(', ')} | Utilizador: ${email}`);
+          const emailTasks = [];
+
+          if (adminEmails.length > 0) {
+            emailTasks.push(
+              sendUserApprovalNotification(adminEmails, email, created.approvalToken, frontendUrl)
+                .then(r => console.log('[REGISTER] Alerta de aprovação enviado aos admins:', r))
+                .catch(err => console.error('[REGISTER] Erro ao alertar admins:', err.message))
+            );
+          }
+
+          emailTasks.push(
+            sendUserRegistrationPendingNotification(email, frontendUrl)
+              .then(r => console.log('[REGISTER] Confirmação de registo enviada ao novo utilizador:', r))
+              .catch(err => console.error('[REGISTER] Erro ao enviar ao novo utilizador:', err.message))
+          );
+
+          // AWAIT OBRIGATÓRIO NA VERCEL: Se não fizermos await, o Vercel Serverless mata a execução antes do envio!
+          await Promise.allSettled(emailTasks);
+          console.log('[REGISTER] Todos os e-mails de registo foram concluídos.');
+        } catch (mailError) {
+          console.error('[REGISTER] Erro durante envio de emails:', mailError);
         }
-        // 2. Enviar email de cortesia ao novo utilizador informando que a conta está suspensa a aguardar aceitação
-        sendUserRegistrationPendingNotification(email, frontendUrl)
-          .catch((emailError) => {
-            console.error('Failed to send pending notification to user:', emailError);
-          });
       }
 
       console.log('Returning pending approval response');
@@ -331,7 +343,12 @@ router.post('/approve/:token', async (req, res) => {
 
     if (isEmailConfigured() && user?.email) {
       const frontendUrl = process.env.FRONTEND_URL || 'https://despesa-app.vercel.app';
-      sendUserApprovedConfirmation(user.email, frontendUrl).catch(e => console.error('Erro ao enviar email de aprovacao:', e));
+      try {
+        await sendUserApprovedConfirmation(user.email, frontendUrl);
+        console.log('[APPROVE-TOKEN] E-mail de conta aprovada enviado para:', user.email);
+      } catch (e) {
+        console.error('[APPROVE-TOKEN] Erro ao enviar e-mail de conta aprovada:', e);
+      }
     }
 
     res.json({

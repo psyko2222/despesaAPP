@@ -60,7 +60,12 @@ router.post('/users/:userId/approve', authenticateToken, requireAdmin, async (re
     const { isEmailConfigured, sendUserApprovedConfirmation } = require('../services/emailService');
     if (isEmailConfigured() && user?.email) {
       const frontendUrl = process.env.FRONTEND_URL || 'https://despesa-app.vercel.app';
-      sendUserApprovedConfirmation(user.email, frontendUrl).catch(e => console.error('Erro ao enviar confirmacao de aprovacao:', e));
+      try {
+        await sendUserApprovedConfirmation(user.email, frontendUrl);
+        console.log('[ADMIN-PANEL] E-mail de conta aprovada enviado para:', user.email);
+      } catch (e) {
+        console.error('[ADMIN-PANEL] Erro ao enviar confirmacao de aprovacao:', e);
+      }
     }
 
     res.json({
