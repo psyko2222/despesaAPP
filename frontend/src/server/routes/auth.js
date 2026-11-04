@@ -113,9 +113,21 @@ router.post('/register', async (req, res) => {
         : "SELECT email FROM users WHERE role IN ('admin', 'admin_private') AND status = ?";
       const adminsResult = await query(adminsQuery, ['approved']);
       const admins = isPostgres ? adminsResult.rows : adminsResult;
-      const adminEmails = (admins || []).map((a) => a.email);
+      let adminEmails = (admins || []).map((a) => a.email);
+
+      // Se existir a variável ADMIN_EMAIL na Vercel, inclui também
+      if (process.env.ADMIN_EMAIL) {
+        adminEmails.push(process.env.ADMIN_EMAIL);
+      }
+      // Salvaguarda: se nenhum admin for encontrado, envia para o email de notificações
+      if (adminEmails.length === 0) {
+        adminEmails.push(process.env.SMTP_USER || 'despesasnotificacao@gmail.com');
+      }
+      // Limpar duplicados e espaços
+      adminEmails = [...new Set(adminEmails.map(e => String(e).trim().toLowerCase()).filter(Boolean))];
+
       const frontendUrl = process.env.FRONTEND_URL || 'https://despesa-app.vercel.app';
-      console.log('Admins found:', adminEmails);
+      console.log('Admins to notify:', adminEmails);
 
       if (isEmailConfigured()) {
         // 1. Notificar os administradores de que existe um novo registo e contas para aprovar
