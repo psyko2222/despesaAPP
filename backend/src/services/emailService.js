@@ -7,16 +7,18 @@ function isPlaceholder(value) {
 }
 
 function fromAddress() {
-  return (
+  const addr = (
     process.env.SMTP_FROM ||
     process.env.SMTP_USER ||
     process.env.EMAIL_FROM ||
-    'noreply@despesas.app'
-  );
+    'despesasnotificacao@gmail.com'
+  ).trim();
+  return addr.replace(/@gmial\.com$/i, '@gmail.com');
 }
 
 function isEmailConfigured() {
-  const hasUserAndPass = process.env.SMTP_USER && !isPlaceholder(process.env.SMTP_USER) &&
+  const user = process.env.SMTP_USER || 'despesasnotificacao@gmail.com';
+  const hasUserAndPass = user && !isPlaceholder(user) &&
                          process.env.SMTP_PASS && !isPlaceholder(process.env.SMTP_PASS);
   const hasHost = process.env.SMTP_HOST && !isPlaceholder(process.env.SMTP_HOST);
   return Boolean(hasUserAndPass || hasHost);

@@ -7,16 +7,18 @@ function isPlaceholder(value) {
 }
 
 function fromAddress() {
-  return (
+  const addr = (
     process.env.SMTP_FROM ||
     process.env.SMTP_USER ||
     process.env.EMAIL_FROM ||
-    'noreply@despesas.app'
-  );
+    'despesasnotificacao@gmail.com'
+  ).trim();
+  return addr.replace(/@gmial\.com$/i, '@gmail.com');
 }
 
 function isEmailConfigured() {
-  const hasUserAndPass = process.env.SMTP_USER && !isPlaceholder(process.env.SMTP_USER) &&
+  const user = process.env.SMTP_USER || 'despesasnotificacao@gmail.com';
+  const hasUserAndPass = user && !isPlaceholder(user) &&
                          process.env.SMTP_PASS && !isPlaceholder(process.env.SMTP_PASS);
   const hasHost = process.env.SMTP_HOST && !isPlaceholder(process.env.SMTP_HOST);
   return Boolean(hasUserAndPass || hasHost);
@@ -26,7 +28,8 @@ function getTransporter() {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = parseInt(process.env.SMTP_PORT || '465', 10);
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
-  const user = process.env.SMTP_USER;
+  let user = (process.env.SMTP_USER || 'despesasnotificacao@gmail.com').trim();
+  user = user.replace(/@gmial\.com$/i, '@gmail.com');
   const rawPass = process.env.SMTP_PASS || '';
   // Limpar espaços da palavra-passe de aplicação (ex: 'f m b b z z v v m w h c q f g v' -> 'fmbbzzvvmwhcqfgv')
   const pass = rawPass.replace(/\s+/g, '');
