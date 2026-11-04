@@ -101,14 +101,43 @@ router.post('/users/:userId/reject', authenticateToken, requireAdmin, async (req
 router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const sql = `
-      SELECT u.id, u.email, u.status, u.role, u.created_at, u.last_login,
-             CASE WHEN prr.id IS NOT NULL AND prr.status = 'pending' THEN 1 ELSE 0 END as has_pending_reset
+      SELECT 
+        u.id, 
+        u.email, 
+        u.status, 
+        u.role, 
+        u.created_at, 
+        u.last_login,
+        (SELECT COUNT(*) FROM password_reset_tokens prt WHERE prt.user_id = u.id) as reset_tokens_count,
+        (SELECT COUNT(*) FROM password_reset_requests prr WHERE prr.user_id = u.id) as reset_requests_count_raw,
+        (SELECT MAX(requested_at) FROM password_reset_requests prr WHERE prr.user_id = u.id) as last_reset_req_at,
+        (SELECT MAX(created_at) FROM password_reset_tokens prt WHERE prt.user_id = u.id) as last_token_at,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM password_reset_requests prr WHERE prr.user_id = u.id AND prr.status = 'pending'
+        ) THEN 1 ELSE 0 END as has_pending_reset
       FROM users u
-      LEFT JOIN password_reset_requests prr ON u.id = prr.user_id AND prr.status = 'pending'
       ORDER BY u.created_at DESC
     `;
     const usersResult = await query(sql, []);
-    const users = isPostgres ? usersResult.rows : usersResult;
+    const rawUsers = isPostgres ? usersResult.rows : usersResult;
+    const users = rawUsers.map(u => {
+      const resetCount = Math.max(
+        parseInt(u.reset_tokens_count || 0, 10),
+        parseInt(u.reset_requests_count_raw || 0, 10)
+      );
+      const lastResetDate = u.last_reset_req_at || u.last_token_at || null;
+      return {
+        id: u.id,
+        email: u.email,
+        status: u.status,
+        role: u.role,
+        created_at: u.created_at,
+        last_login: u.last_login,
+        has_pending_reset: Boolean(u.has_pending_reset),
+        reset_requests_count: resetCount,
+        last_reset_request_at: lastResetDate
+      };
+    });
 
     res.json(users);
   } catch (error) {

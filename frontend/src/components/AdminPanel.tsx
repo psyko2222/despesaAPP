@@ -27,6 +27,8 @@ interface AllUser {
   created_at: string;
   last_login?: string;
   has_pending_reset?: boolean;
+  reset_requests_count?: number;
+  last_reset_request_at?: string;
 }
 
 interface LogEntry {
@@ -519,15 +521,31 @@ export function AdminPanel() {
                             🔑 Reset Pendente
                           </span>
                         )}
+                        {(allUser.reset_requests_count || 0) > 0 && (
+                          <span 
+                            className="text-[11px] bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-300 dark:border-amber-700"
+                            title={`Este utilizador solicitou recuperação de password ${allUser.reset_requests_count} vezes`}
+                          >
+                            🔑 {allUser.reset_requests_count} {allUser.reset_requests_count === 1 ? 'reset pedido' : 'resets pedidos'}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        Registado em: {new Date(allUser.created_at).toLocaleDateString('pt-PT')}
-                      </p>
-                      {allUser.last_login && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          Último login: {new Date(allUser.last_login).toLocaleDateString('pt-PT')}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-gray-600 dark:text-gray-400">
+                        <p>
+                          Registado em: {new Date(allUser.created_at).toLocaleDateString('pt-PT')}
                         </p>
-                      )}
+                        {allUser.last_login && (
+                          <p>
+                            Último login: {new Date(allUser.last_login).toLocaleDateString('pt-PT')}
+                          </p>
+                        )}
+                        <p className="text-gray-500 dark:text-gray-400">
+                          Pedidos de recuperação: <strong className="text-gray-700 dark:text-gray-300">{allUser.reset_requests_count || 0}</strong>
+                          {allUser.last_reset_request_at && (
+                            <span className="text-gray-400 dark:text-gray-500"> (último: {new Date(allUser.last_reset_request_at).toLocaleDateString('pt-PT')})</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-1.5 items-center justify-end flex-shrink-0">
