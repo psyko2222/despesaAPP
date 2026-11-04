@@ -67,10 +67,10 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
         is_private: canPrivate && isPrivate ? 1 : 0,
       };
 
-      console.log('=== DEBUG: Sending expense data ===', { 
-        ...expenseData, 
+      console.log('=== DEBUG: Sending expense data ===', {
+        ...expenseData,
         currentRecurrenceMonthsState: recurrenceMonths,
-        isRecurring: recurring 
+        isRecurring: recurring
       }, new Date().toISOString());
 
       if (initialExpense) {
@@ -169,15 +169,14 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
                     Periodicidade
                   </label>
                   <select
-                    value={recurrenceMonths}
+                    value={[12, 24, 36].includes(recurrenceMonths) ? 12 : recurrenceMonths}
                     onChange={(e) => {
-                      const newValue = parseInt(e.target.value);
-                      console.log('=== DEBUG: Select changed ===', { 
-                        oldValue: recurrenceMonths, 
-                        newValue: newValue,
-                        optionText: e.target.options[e.target.selectedIndex].text 
-                      });
-                      setRecurrenceMonths(newValue);
+                      const newValue = parseInt(e.target.value, 10);
+                      if (newValue === 12) {
+                        setRecurrenceMonths([12, 24, 36].includes(recurrenceMonths) ? recurrenceMonths : 12);
+                      } else {
+                        setRecurrenceMonths(newValue);
+                      }
                     }}
                     className="w-full h-10 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
@@ -188,6 +187,28 @@ export function ExpenseForm({ onSuccess, onCancel, initialExpense, userId }: Exp
                     <option value={12}>Anual</option>
                   </select>
                 </div>
+
+                {[12, 24, 36].includes(recurrenceMonths) && (
+                  <div className="p-3 bg-blue-50/70 dark:bg-blue-950/40 rounded-lg border border-blue-200 dark:border-blue-900/60 space-y-1.5 animate-in fade-in duration-150">
+                    <label className="block text-xs font-semibold text-blue-900 dark:text-blue-200 uppercase tracking-wider">
+                      Frequência Anual
+                    </label>
+                    <select
+                      value={recurrenceMonths}
+                      onChange={(e) => setRecurrenceMonths(parseInt(e.target.value, 10))}
+                      className="w-full h-9 rounded-md border border-blue-300 dark:border-blue-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value={12}>Anual (a cada 1 ano)</option>
+                      <option value={24}>Bi-anual (a cada 2 anos)</option>
+                      <option value={36}>Tri-anual (a cada 3 anos)</option>
+                    </select>
+                    <p className="text-[11px] text-blue-700 dark:text-blue-300 leading-tight">
+                      {recurrenceMonths === 12 && '📅 Serão geradas 3 repetições (1 por ano durante 3 anos).'}
+                      {recurrenceMonths === 24 && '📅 Serão geradas 3 repetições (de 2 em 2 anos durante 6 anos).'}
+                      {recurrenceMonths === 36 && '📅 Serão geradas 3 repetições (de 3 em 3 anos durante 9 anos).'}
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-center space-x-2">
                   <input

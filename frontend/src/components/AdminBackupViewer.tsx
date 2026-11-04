@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { adminAPI } from '@/lib/api';
-import { formatMoney, formatDate } from '@/lib/utils';
+import { formatMoney, formatDate, recurrenceLabel } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 
 interface GoogleDriveBackupFile {
@@ -893,7 +893,7 @@ export function AdminBackupViewer() {
                           </td>
                           <td className="py-2.5 px-3.5 text-center whitespace-nowrap">
                             <span className="text-[11px] font-medium text-gray-600 dark:text-gray-400">
-                              {isRecurring ? `Recorrente (${exp.recurrence_months || 1}m)` : 'Pontual'}
+                              {isRecurring ? `Recorrente (${recurrenceLabel(exp.recurrence_months || 1)})` : 'Pontual'}
                             </span>
                           </td>
                           <td className="py-2.5 px-3.5 text-center whitespace-nowrap">

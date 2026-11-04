@@ -16,7 +16,7 @@ router.get('/month/:month', authenticateToken, checkDataAccess, async (req, res)
       ? `SELECT * FROM expenses WHERE user_id = $1 AND debit_date BETWEEN $2 AND $3${privateFilter} ORDER BY debit_date, description`
       : `SELECT * FROM expenses WHERE user_id = ? AND debit_date BETWEEN ? AND ?${privateFilter} ORDER BY debit_date, description`;
     const params = [userId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]];
-    
+
     const expenses = await query(sql, params);
     res.json(isPostgres ? expenses.rows : expenses);
   } catch (error) {
@@ -39,7 +39,7 @@ router.get('/recurring', authenticateToken, checkDataAccess, async (req, res) =>
       ? `SELECT * FROM expenses WHERE user_id = $1 AND recurring = 1 AND debit_date BETWEEN $2 AND $3${privateFilter} ORDER BY debit_date ASC`
       : `SELECT * FROM expenses WHERE user_id = ? AND recurring = 1 AND debit_date BETWEEN ? AND ?${privateFilter} ORDER BY debit_date ASC`;
     const params = [userId, period.start.toISOString().split('T')[0], period.end.toISOString().split('T')[0]];
-    
+
     const expenses = await query(sql, params);
     const expensesArray = isPostgres ? expenses.rows : expenses;
 
@@ -84,7 +84,7 @@ router.get('/upcoming', authenticateToken, checkDataAccess, async (req, res) => 
       ? `SELECT * FROM expenses WHERE user_id = $1 AND debit_date >= $2${privateFilter} ORDER BY debit_date, description`
       : `SELECT * FROM expenses WHERE user_id = ? AND debit_date >= ?${privateFilter} ORDER BY debit_date, description`;
     const params = [userId, today];
-    
+
     const expenses = await query(sql, params);
     res.json(isPostgres ? expenses.rows : expenses);
   } catch (error) {
@@ -263,7 +263,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       ? `SELECT * FROM expenses WHERE id = $1 AND user_id = $2${privateFilter}`
       : `SELECT * FROM expenses WHERE id = ? AND user_id = ?${privateFilter}`;
     const params = [id, userId];
-    
+
     const expense = await queryOne(sql, params);
 
     if (!expense) {
@@ -289,7 +289,7 @@ router.get('/series/:seriesId', authenticateToken, checkDataAccess, async (req, 
       ? `SELECT * FROM expenses WHERE series_id = $1 AND user_id = $2${privateFilter} ORDER BY debit_date`
       : `SELECT * FROM expenses WHERE series_id = ? AND user_id = ?${privateFilter} ORDER BY debit_date`;
     const params = [seriesId, userId];
-    
+
     const expenses = await query(sql, params);
     res.json(isPostgres ? expenses.rows : expenses);
   } catch (error) {
@@ -366,7 +366,7 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
       normalizedMonths,
       finalIsPrivate
     ];
-    
+
     const result = await run(insertSql, insertParams);
     const expenseId = isPostgres ? result.lastInsertRowid : result.lastInsertRowid;
 
@@ -379,8 +379,14 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
 
       // Generate future occurrences with Android rules
       const today = new Date();
+      const isAnnualType = normalizedMonths >= 12;
       const horizon = new Date();
-      horizon.setMonth(horizon.getMonth() + 18); // 18 months ahead from today
+      if (isAnnualType) {
+        // Para despesas anuais (anual: 12m, bi-anual: 24m, tri-anual: 36m), gerar 3 repetições futuras
+        horizon.setMonth(horizon.getMonth() + (normalizedMonths * 3));
+      } else {
+        horizon.setMonth(horizon.getMonth() + 18); // 18 months ahead from today
+      }
 
       let nextDate = new Date(finalDebitDate);
 
@@ -389,7 +395,8 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
         nextDate.setMonth(nextDate.getMonth() + normalizedMonths);
       }
 
-      // Generate future occurrences up to horizon
+      // Generate future occurrences up to horizon (com limite de 3 repetições para tipos anuais)
+      let generatedCount = 0;
       while (nextDate <= horizon) {
         const debitDateStr = nextDate.toISOString().split('T')[0];
 
@@ -422,6 +429,10 @@ router.post('/', authenticateToken, checkDataAccess, requireWriteAccess, async (
             finalIsPrivate
           ];
           await run(occurrenceSql, occurrenceParams);
+          generatedCount++;
+          if (isAnnualType && generatedCount >= 3) {
+            break;
+          }
         }
 
         nextDate.setMonth(nextDate.getMonth() + normalizedMonths);
@@ -649,7 +660,7 @@ router.delete('/:id', authenticateToken, checkDataAccess, requireDeleteAccess, a
         ? 'UPDATE expenses SET active_series = 0 WHERE series_id = $1'
         : 'UPDATE expenses SET active_series = 0 WHERE series_id = ?';
       await run(updateActiveSql, [expense.series_id]);
-      
+
       const deleteSeriesSql = isPostgres
         ? 'DELETE FROM expenses WHERE series_id = $1'
         : 'DELETE FROM expenses WHERE series_id = ?';
@@ -735,6 +746,14 @@ router.post('/ensure-future', authenticateToken, async (req, res) => {
       if (latestDate > horizon) continue;
 
       const interval = normalizedRecurrenceMonths(latest.recurrence_months);
+      const isAnnualType = interval >= 12;
+      const seriesHorizon = new Date();
+      if (isAnnualType) {
+        seriesHorizon.setMonth(seriesHorizon.getMonth() + (interval * 3));
+      } else {
+        seriesHorizon.setMonth(seriesHorizon.getMonth() + monthsAhead);
+      }
+
       let nextDate = new Date(latestDate);
 
       // Skip past occurrences, start from current or future
@@ -742,7 +761,8 @@ router.post('/ensure-future', authenticateToken, async (req, res) => {
         nextDate.setMonth(nextDate.getMonth() + interval);
       }
 
-      while (nextDate <= horizon) {
+      let generatedCount = 0;
+      while (nextDate <= seriesHorizon) {
         const debitDateStr = nextDate.toISOString().split('T')[0];
 
         const existingSql = isPostgres
@@ -773,6 +793,10 @@ router.post('/ensure-future', authenticateToken, async (req, res) => {
             latest.recurrence_months,
             latest.is_private ? 1 : 0
           ]);
+          generatedCount++;
+          if (isAnnualType && generatedCount >= 3) {
+            break;
+          }
         }
 
         nextDate.setMonth(nextDate.getMonth() + interval);

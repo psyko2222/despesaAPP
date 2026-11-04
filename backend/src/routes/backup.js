@@ -70,23 +70,23 @@ router.post('/import', authenticateToken, async (req, res) => {
       for (const expense of expenses) {
         // Handle Android format (amount_cents) vs web format (amount_cents)
         const amountCents = expense.amount_cents || (expense.amount ? Math.round(expense.amount * 100) : 0);
-        
+
         // Handle Android format (paid as 0/1) vs web format (paid as boolean)
         const paid = typeof expense.paid === 'boolean' ? (expense.paid ? 1 : 0) : expense.paid;
-        
+
         // Handle Android format (recurring as 0/1) vs web format (recurring as boolean)
         const recurring = typeof expense.recurring === 'boolean' ? (expense.recurring ? 1 : 0) : expense.recurring;
-        
+
         // Handle Android format (fixed_amount as 0/1) vs web format (fixed_amount as boolean)
         const fixedAmount = typeof expense.fixed_amount === 'boolean' ? (expense.fixed_amount ? 1 : 0) : (expense.fixed_amount || 1);
-        
+
         // Handle Android format (active_series as 0/1) vs web format (active_series as boolean)
         const activeSeries = typeof expense.active_series === 'boolean' ? (expense.active_series ? 1 : 0) : (expense.active_series || 1);
 
         const insertExpenseSql = isPostgres
           ? 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, active_series, recurrence_months, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)'
           : 'INSERT INTO expenses (user_id, series_id, description, amount_cents, debit_date, paid, recurring, fixed_amount, original_day, active_series, recurrence_months, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-        
+
         const expenseParams = [
           userId,
           expense.series_id || null,
@@ -114,7 +114,7 @@ router.post('/import', authenticateToken, async (req, res) => {
       if (settings) {
         // Handle Android format settings
         const debitReminderDays = settings.debit_reminder_days || Math.floor((settings.hours || 24) / 24);
-        const notificationsEnabled = settings.notifications_enabled !== undefined ? 
+        const notificationsEnabled = settings.notifications_enabled !== undefined ?
           (typeof settings.notifications_enabled === 'boolean' ? (settings.notifications_enabled ? 1 : 0) : settings.notifications_enabled) : 1;
         const debitNotificationsEnabled = settings.debit_notifications_enabled !== undefined ?
           (typeof settings.debit_notifications_enabled === 'boolean' ? (settings.debit_notifications_enabled ? 1 : 0) : settings.debit_notifications_enabled) : 1;
@@ -160,7 +160,7 @@ router.post('/import', authenticateToken, async (req, res) => {
             terms_accepted_version = ?,
             terms_accepted_at = ?
           WHERE user_id = ?`;
-        
+
         const settingsParams = [
           notificationsEnabled,
           debitNotificationsEnabled,
@@ -194,7 +194,7 @@ router.post('/import', authenticateToken, async (req, res) => {
     const horizon = currentFinancialPeriodMonth();
     const horizonDate = new Date(horizon);
     horizonDate.setMonth(horizonDate.getMonth() + 18);
-    
+
     const recurringSql = isPostgres
       ? 'SELECT * FROM expenses WHERE user_id = $1 AND recurring = 1 AND active_series = 1 AND id = series_id'
       : 'SELECT * FROM expenses WHERE user_id = ? AND recurring = 1 AND active_series = 1 AND id = series_id';
@@ -203,7 +203,7 @@ router.post('/import', authenticateToken, async (req, res) => {
 
     for (const root of recurringExpenses) {
       const seriesId = root.series_id || root.id;
-      
+
       const latestSql = isPostgres
         ? 'SELECT * FROM expenses WHERE series_id = $1 AND user_id = $2 ORDER BY debit_date DESC LIMIT 1'
         : 'SELECT * FROM expenses WHERE series_id = ? AND user_id = ? ORDER BY debit_date DESC LIMIT 1';
@@ -213,15 +213,22 @@ router.post('/import', authenticateToken, async (req, res) => {
       if (latestDate > horizonDate) continue;
 
       const interval = normalizedRecurrenceMonths(latest.recurrence_months);
+      const isAnnualType = interval >= 12;
+      const seriesHorizon = new Date(horizonDate);
+      if (isAnnualType) {
+        seriesHorizon.setMonth(seriesHorizon.getMonth() + (interval * 3));
+      }
+
       let nextDate = new Date(latestDate);
       nextDate.setMonth(nextDate.getMonth() + interval);
 
-      while (nextDate <= horizonDate) {
+      let generatedCount = 0;
+      while (nextDate <= seriesHorizon) {
         const monthStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
         const lastDay = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
         let day = Math.min(latest.original_day, lastDay);
         let adjustedDate = new Date(nextDate.getFullYear(), nextDate.getMonth(), day);
-        
+
         // Skip weekends
         while (adjustedDate.getDay() === 0 || adjustedDate.getDay() === 6) {
           adjustedDate.setDate(adjustedDate.getDate() + 1);
@@ -254,6 +261,10 @@ router.post('/import', authenticateToken, async (req, res) => {
             latest.original_day,
             latest.recurrence_months
           ]);
+          generatedCount++;
+          if (isAnnualType && generatedCount >= 3) {
+            break;
+          }
         }
 
         nextDate.setMonth(nextDate.getMonth() + interval);

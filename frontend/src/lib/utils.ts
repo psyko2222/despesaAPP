@@ -67,6 +67,8 @@ export function recurrenceLabel(months: number): string {
     case 3: return 'Trimestral';
     case 6: return 'Semestral';
     case 12: return 'Anual';
+    case 24: return 'Bi-anual';
+    case 36: return 'Tri-anual';
     default: return `A cada ${normalized} meses`;
   }
 }
