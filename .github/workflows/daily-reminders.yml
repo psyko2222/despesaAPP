@@ -1,11 +1,10 @@
 name: Disparar Lembretes Diários
 
 on:
-  # O disparo agendado diário é feito nativamente pelo Vercel Cron (configurado em frontend/vercel.json)
-  # às 09:05 UTC. O agendamento do GitHub Actions foi desativado para evitar disparos duplicados em simultâneo.
-  # Mantém-se workflow_dispatch para permitir testes manuais sempre que necessário.
-  # schedule:
-  #   - cron: '5 9 * * *'
+  schedule:
+    # Corre a cada hora aos :05 minutos (ex: 07:05, 08:05, 09:05, 10:05... fuso de Lisboa/UTC)
+    # Permite disparar as notificações na hora específica configurada por cada utilizador
+    - cron: '5 * * * *'
   workflow_dispatch:
     inputs:
       force_day:
@@ -13,7 +12,7 @@ on:
         required: false
         default: ''
       force:
-        description: 'Forçar envio ignorando deduplicação diária (true/false)'
+        description: 'Forçar envio ignorando hora e deduplicação diária (true/false)'
         required: false
         default: 'false'
 

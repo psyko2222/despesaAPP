@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { settingsAPI, backupAPI, authAPI, adminAPI } from '@/lib/api';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useToast } from '@/components/ui/toast';
-import { Bell, BellOff, CheckCircle2, AlertCircle, Send, Loader2, Sun, Moon, Monitor, Sliders, Database, Lock, Trash2, Download, Laptop, BookOpen, Users, Eye, EyeOff } from 'lucide-react';
+import { Bell, BellOff, CheckCircle2, AlertCircle, Send, Loader2, Sun, Moon, Monitor, Sliders, Database, Lock, Trash2, Download, Laptop, BookOpen, Users, Eye, EyeOff, Clock } from 'lucide-react';
 import { InstallGuideModal } from '@/components/InstallGuideModal';
 import { SharesScreen } from '@/components/SharesScreen';
 import { Settings } from '@/types';
@@ -130,6 +130,9 @@ export function SettingsScreen() {
         }
         if (data.backup_reminder_day === undefined) {
           data.backup_reminder_day = 21;
+        }
+        if (data.debit_reminder_hour === undefined || data.debit_reminder_hour === null) {
+          data.debit_reminder_hour = 9;
         }
       }
       setSettings(data);
@@ -481,6 +484,36 @@ export function SettingsScreen() {
                 Escolha as notificações que pretende ativar com visto:
               </p>
 
+              {/* Hora Preferida para Receber Alertas */}
+              <div className="p-3 bg-primary-50/60 dark:bg-primary-950/25 rounded-lg border border-primary-200 dark:border-primary-800/60 space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <Clock className="w-5 h-5 text-primary-600 dark:text-primary-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 block">
+                        Hora preferida de receção dos lembretes
+                      </span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Escolha a que horas do dia prefere receber os seus alertas (horário de Portugal).
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pl-7 sm:pl-0">
+                    <select
+                      value={settings.debit_reminder_hour ?? 9}
+                      onChange={(e) => setSettings({ ...settings, debit_reminder_hour: parseInt(e.target.value, 10) })}
+                      className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm font-medium focus:ring-2 focus:ring-primary-500 cursor-pointer shadow-sm"
+                    >
+                      {Array.from({ length: 18 }, (_, i) => i + 6).map((hour) => (
+                        <option key={hour} value={hour}>
+                          {String(hour).padStart(2, '0')}:00 {hour < 12 ? '(manhã)' : hour < 20 ? '(tarde)' : '(noite)'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               {/* 1º Lembrete Antecipado */}
               <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
                 <div className="flex items-center justify-between">
@@ -580,7 +613,7 @@ export function SettingsScreen() {
                   )}
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 pl-6">
-                  Alerta às 10:00 se houver despesas agendadas para hoje que ainda não tenham sido marcadas como pagas.
+                  Alerta às {(settings.debit_reminder_hour ?? 9).toString().padStart(2, '0')}:00 se houver despesas agendadas para hoje que ainda não tenham sido marcadas como pagas.
                 </p>
               </div>
 
@@ -604,7 +637,7 @@ export function SettingsScreen() {
                 </div>
 
                 <p className="text-xs text-gray-500 dark:text-gray-400 pl-6">
-                  Dispara às 10:00 nos dias selecionados apenas se existirem despesas sem valor por preencher.
+                  Dispara às {(settings.debit_reminder_hour ?? 9).toString().padStart(2, '0')}:00 nos dias selecionados apenas se existirem despesas sem valor por preencher.
                 </p>
 
                 {settings.no_value_reminder_enabled === 1 && (

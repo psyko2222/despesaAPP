@@ -51,6 +51,8 @@ async function processDebitReminders(options = {}) {
            COALESCE(s.notifications_enabled, 1) as notifications_enabled,
            COALESCE(s.debit_notifications_enabled, 1) as debit_notifications_enabled,
            COALESCE(s.debit_reminder_days, 1) as debit_reminder_days,
+           COALESCE(s.debit_reminder_hour, 9) as debit_reminder_hour,
+           COALESCE(s.debit_reminder_minute, 0) as debit_reminder_minute,
            COALESCE(s.second_debit_reminder_enabled, 0) as second_debit_reminder_enabled,
            COALESCE(s.second_debit_reminder_days, 0) as second_debit_reminder_days,
            COALESCE(s.same_day_reminder_enabled, 1) as same_day_reminder_enabled,
@@ -77,8 +79,33 @@ async function processDebitReminders(options = {}) {
 
   const results = [];
 
+  const lisbonParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Lisbon',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: 'numeric',
+    hour12: false
+  }).formatToParts(new Date());
+
+  const lisbonHour = parseInt(lisbonParts.find(p => p.type === 'hour')?.value || '9', 10);
+
   for (const user of users) {
     if (user.notifications_enabled === 0) continue;
+
+    // Verificar se já é hora de processar lembretes para este utilizador (fuso de Lisboa)
+    const userPreferredHour = user.debit_reminder_hour !== undefined && user.debit_reminder_hour !== null
+      ? parseInt(user.debit_reminder_hour, 10)
+      : 9;
+
+    const isManualTest = options.force || options.forceDay !== undefined;
+    const isTimeToRunForUser = isManualTest || (lisbonHour >= userPreferredHour);
+
+    if (!isTimeToRunForUser) {
+      console.log(`[Agendamento] Utilizador ${user.id} (${user.email}) configurou para as ${userPreferredHour}:00. Hora atual em Lisboa: ${lisbonHour}:00. A aguardar.`);
+      continue;
+    }
+
     const isPrivateAdmin = user.role === 'admin_private';
 
     // Obter subscrições Web Push do utilizador
