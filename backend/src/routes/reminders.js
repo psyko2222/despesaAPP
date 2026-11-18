@@ -99,7 +99,11 @@ async function processDebitReminders(options = {}) {
     const sendPush = async (title, body, tag = undefined) => {
       let pushSent = 0;
       if (subscriptions && subscriptions.length > 0) {
+        const seenEndpoints = new Set();
         for (const sub of subscriptions) {
+          if (!sub.endpoint || seenEndpoints.has(sub.endpoint)) continue;
+          seenEndpoints.add(sub.endpoint);
+
           const sendRes = await webPushService.sendPushNotification(sub, {
             title,
             body,
@@ -201,7 +205,47 @@ async function processDebitReminders(options = {}) {
         }
       }
 
-      const pushSent = await sendPush(notificationTitle, notificationBody, `debit-${daysBefore}`);
+      // Guard de deduplicação diária
+      if (!options.force) {
+        let titlePattern = notificationTitle;
+        if (daysBefore === 0) {
+          titlePattern = '%Hoje%';
+        } else if (daysBefore === 1) {
+          titlePattern = '%Amanhã%';
+        } else {
+          titlePattern = `%em ${daysBefore} dias%`;
+        }
+
+        const checkDebitSql = isPostgres
+          ? `SELECT id FROM notifications 
+             WHERE user_id = $1 
+               AND type = 'reminder' 
+               AND (title = $2 OR title LIKE $3) 
+               AND created_at >= CURRENT_DATE`
+          : `SELECT id FROM notifications 
+             WHERE user_id = ? 
+               AND type = 'reminder' 
+               AND (title = ? OR title LIKE ?) 
+               AND date(created_at) = date('now')`;
+        const checkRes = await query(checkDebitSql, [user.id, notificationTitle, titlePattern]);
+        const existing = isPostgres ? (checkRes.rows || checkRes) : checkRes;
+        if (existing && existing.length > 0) {
+          console.log(`[Deduplicação] Notificação de débito "${notificationTitle}" já enviada hoje para utilizador ${user.id}. A ignorar envio duplicado.`);
+          continue;
+        }
+      }
+
+      const pushSent = await sendPush(notificationTitle, notificationBody, `debit-${daysBefore}-${targetDateStr}`);
+
+      // Registar também na central interna de notificações (sino)
+      try {
+        const notifSql = isPostgres
+          ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
+          : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
+        await query(notifSql, [user.id, notificationTitle, notificationBody, 'reminder']);
+      } catch (errNotif) {
+        console.error('Erro ao registar notificação interna:', errNotif);
+      }
 
       let emailSent = false;
       if (process.env.ENABLE_EMAIL_REMINDERS === 'true' && isEmailConfigured()) {
@@ -277,27 +321,60 @@ async function processDebitReminders(options = {}) {
             notificationBody = `Por favor verifique despesas sem valor: existem ${count} despesas (${names}) por preencher.`;
           }
 
-          const pushSent = await sendPush(notificationTitle, notificationBody, 'no-value-reminder');
-
-          let emailSent = false;
-          if (process.env.ENABLE_EMAIL_REMINDERS === 'true' && isEmailConfigured()) {
-            try {
-              const emailRes = await sendNoValueExpensesEmail(user.email, noValExpenses);
-              emailSent = emailRes.success;
-            } catch (err) {
-              console.error(`Error sending no-value email to ${user.email}:`, err.message);
+          let noValAlreadySent = false;
+          if (!options.force) {
+            const checkNoValSql = isPostgres
+              ? `SELECT id FROM notifications 
+                 WHERE user_id = $1 
+                   AND type = 'warning' 
+                   AND title = $2 
+                   AND created_at >= CURRENT_DATE`
+              : `SELECT id FROM notifications 
+                 WHERE user_id = ? 
+                   AND type = 'warning' 
+                   AND title = ? 
+                   AND date(created_at) = date('now')`;
+            const checkRes = await query(checkNoValSql, [user.id, notificationTitle]);
+            const existing = isPostgres ? (checkRes.rows || checkRes) : checkRes;
+            if (existing && existing.length > 0) {
+              console.log(`[Deduplicação] Notificação de despesas sem valor já enviada hoje para utilizador ${user.id}. A ignorar envio duplicado.`);
+              noValAlreadySent = true;
             }
           }
 
-          results.push({
-            userId: user.id,
-            email: user.email,
-            type: 'no_value_reminder',
-            currentDay,
-            expensesCount: count,
-            pushSent,
-            emailSent
-          });
+          if (!noValAlreadySent) {
+            const pushSent = await sendPush(notificationTitle, notificationBody, `no-value-reminder-${lisbonTodayStr}`);
+
+            // Registar na central interna de notificações
+            try {
+              const notifSql = isPostgres
+                ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
+                : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
+              await query(notifSql, [user.id, notificationTitle, notificationBody, 'warning']);
+            } catch (errNotif) {
+              console.error('Erro ao registar notificação interna:', errNotif);
+            }
+
+            let emailSent = false;
+            if (process.env.ENABLE_EMAIL_REMINDERS === 'true' && isEmailConfigured()) {
+              try {
+                const emailRes = await sendNoValueExpensesEmail(user.email, noValExpenses);
+                emailSent = emailRes.success;
+              } catch (err) {
+                console.error(`Error sending no-value email to ${user.email}:`, err.message);
+              }
+            }
+
+            results.push({
+              userId: user.id,
+              email: user.email,
+              type: 'no_value_reminder',
+              currentDay,
+              expensesCount: count,
+              pushSent,
+              emailSent
+            });
+          }
         }
       }
     }
@@ -310,8 +387,10 @@ async function processDebitReminders(options = {}) {
 // Aceita tanto GET como POST para ser compatível com qualquer serviço externo de cron
 router.all('/check', verifyCronAuth, async (req, res) => {
   try {
-    const forceDay = req.query.forceDay ? parseInt(req.query.forceDay, 10) : undefined;
-    const details = await processDebitReminders({ forceDay });
+    const rawForceDay = req.query?.forceDay || req.query?.forceday || req.query?.force_day || (req.body && req.body.forceDay);
+    const forceDay = rawForceDay !== undefined ? parseInt(rawForceDay, 10) : undefined;
+    const force = req.query?.force === 'true' || req.query?.force === true || (req.body && (req.body.force === true || req.body.force === 'true'));
+    const details = await processDebitReminders({ forceDay, force });
     res.json({
       success: true,
       timestamp: new Date().toISOString(),

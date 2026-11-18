@@ -1,4 +1,4 @@
-const CACHE_NAME = 'despesas-v4';
+const CACHE_NAME = 'despesas-v5';
 const urlsToCache = [
   '/',
   '/manifest.json',
@@ -87,8 +87,8 @@ self.addEventListener('push', (event) => {
     body: data.body || '',
     icon: data.icon || '/icon-192.png',
     badge: data.badge || '/icon-192.png',
-    tag: data.tag || `despesa-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    renotify: true,
+    tag: data.tag || 'despesa-lembrete',
+    renotify: data.renotify === true,
     vibrate: [200, 100, 200],
     data: {
       url: data.url || '/'

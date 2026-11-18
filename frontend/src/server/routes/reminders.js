@@ -82,14 +82,20 @@ async function processDebitReminders(options = {}) {
     const isPrivateAdmin = user.role === 'admin_private';
 
     // Obter subscrições Web Push do utilizador
-    const subsSql = 'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1';
+    const subsSql = isPostgres
+      ? 'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1'
+      : 'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?';
     const subsResult = await query(subsSql, [user.id]);
-    const subscriptions = subsResult.rows || subsResult;
+    const subscriptions = isPostgres ? (subsResult.rows || subsResult) : subsResult;
 
     const sendPush = async (title, body, tag = undefined) => {
       let pushSent = 0;
       if (subscriptions && subscriptions.length > 0) {
+        const seenEndpoints = new Set();
         for (const sub of subscriptions) {
+          if (!sub.endpoint || seenEndpoints.has(sub.endpoint)) continue;
+          seenEndpoints.add(sub.endpoint);
+
           const sendRes = await webPushService.sendPushNotification(sub, {
             title,
             body,
@@ -102,7 +108,10 @@ async function processDebitReminders(options = {}) {
           if (sendRes.success) {
             pushSent++;
           } else if (sendRes.isExpired) {
-            await run('DELETE FROM push_subscriptions WHERE id = $1', [sub.id]);
+            const delSql = isPostgres
+              ? 'DELETE FROM push_subscriptions WHERE id = $1'
+              : 'DELETE FROM push_subscriptions WHERE id = ?';
+            await run(delSql, [sub.id]);
           }
         }
       }
@@ -177,7 +186,37 @@ async function processDebitReminders(options = {}) {
         }
       }
 
-      const pushSent = await sendPush(notificationTitle, notificationBody, `debit-${daysBefore}`);
+      // Guard de deduplicação diária: evitar envio duplicado de lembretes para a mesma data de débito
+      if (!options.force) {
+        let titlePattern = notificationTitle;
+        if (daysBefore === 0) {
+          titlePattern = '%Hoje%';
+        } else if (daysBefore === 1) {
+          titlePattern = '%Amanhã%';
+        } else {
+          titlePattern = `%em ${daysBefore} dias%`;
+        }
+
+        const checkDebitSql = isPostgres
+          ? `SELECT id FROM notifications 
+             WHERE user_id = $1 
+               AND type = 'reminder' 
+               AND (title = $2 OR title LIKE $3) 
+               AND created_at >= CURRENT_DATE`
+          : `SELECT id FROM notifications 
+             WHERE user_id = ? 
+               AND type = 'reminder' 
+               AND (title = ? OR title LIKE ?) 
+               AND date(created_at) = date('now')`;
+        const checkRes = await query(checkDebitSql, [user.id, notificationTitle, titlePattern]);
+        const existing = isPostgres ? (checkRes.rows || checkRes) : checkRes;
+        if (existing && existing.length > 0) {
+          console.log(`[Deduplicação] Notificação de débito "${notificationTitle}" já enviada hoje para utilizador ${user.id}. A ignorar envio duplicado.`);
+          continue;
+        }
+      }
+
+      const pushSent = await sendPush(notificationTitle, notificationBody, `debit-${daysBefore}-${targetDateStr}`);
 
       // Registar também na central interna de notificações (sino)
       try {
@@ -245,26 +284,50 @@ async function processDebitReminders(options = {}) {
             notificationBody = `Existem ${count} despesas (${names}) sem valor definido no ciclo atual.`;
           }
 
-          const pushSent = await sendPush(notificationTitle, notificationBody, 'no-value-reminder');
-
-          // Registar na central interna de notificações
-          try {
-            const notifSql = isPostgres
-              ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
-              : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
-            await query(notifSql, [user.id, notificationTitle, notificationBody, 'warning']);
-          } catch (errNotif) {
-            console.error('Erro ao registar notificação interna:', errNotif);
+          // Guard de deduplicação diária
+          let noValAlreadySent = false;
+          if (!options.force) {
+            const checkNoValSql = isPostgres
+              ? `SELECT id FROM notifications 
+                 WHERE user_id = $1 
+                   AND type = 'warning' 
+                   AND title = $2 
+                   AND created_at >= CURRENT_DATE`
+              : `SELECT id FROM notifications 
+                 WHERE user_id = ? 
+                   AND type = 'warning' 
+                   AND title = ? 
+                   AND date(created_at) = date('now')`;
+            const checkRes = await query(checkNoValSql, [user.id, notificationTitle]);
+            const existing = isPostgres ? (checkRes.rows || checkRes) : checkRes;
+            if (existing && existing.length > 0) {
+              console.log(`[Deduplicação] Notificação de despesas sem valor já enviada hoje para utilizador ${user.id}. A ignorar envio duplicado.`);
+              noValAlreadySent = true;
+            }
           }
 
-          results.push({
-            userId: user.id,
-            email: user.email,
-            type: 'no_value_reminder',
-            currentDay,
-            expensesCount: count,
-            pushSent
-          });
+          if (!noValAlreadySent) {
+            const pushSent = await sendPush(notificationTitle, notificationBody, `no-value-reminder-${lisbonTodayStr}`);
+
+            // Registar na central interna de notificações
+            try {
+              const notifSql = isPostgres
+                ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
+                : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
+              await query(notifSql, [user.id, notificationTitle, notificationBody, 'warning']);
+            } catch (errNotif) {
+              console.error('Erro ao registar notificação interna:', errNotif);
+            }
+
+            results.push({
+              userId: user.id,
+              email: user.email,
+              type: 'no_value_reminder',
+              currentDay,
+              expensesCount: count,
+              pushSent
+            });
+          }
         }
       }
     }
@@ -286,25 +349,49 @@ async function processDebitReminders(options = {}) {
       if (currentDay === targetBackupDay) {
         const notificationTitle = '💾 Cópia de Segurança Mensal';
         const notificationBody = 'O ciclo do mês fechou. Clique para descarregar o backup dos seus dados.';
-        const pushSent = await sendPush(notificationTitle, notificationBody, 'monthly-backup-reminder');
 
-        // Registar na central interna de notificações
-        try {
-          const notifSql = isPostgres
-            ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
-            : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
-          await query(notifSql, [user.id, notificationTitle, notificationBody, 'backup']);
-        } catch (errNotif) {
-          console.error('Erro ao registar notificação interna:', errNotif);
+        let backupAlreadySent = false;
+        if (!options.force) {
+          const checkBackupSql = isPostgres
+            ? `SELECT id FROM notifications 
+               WHERE user_id = $1 
+                 AND type = 'backup' 
+                 AND title = $2 
+                 AND created_at >= CURRENT_DATE`
+            : `SELECT id FROM notifications 
+               WHERE user_id = ? 
+                 AND type = 'backup' 
+                 AND title = ? 
+                 AND date(created_at) = date('now')`;
+          const checkRes = await query(checkBackupSql, [user.id, notificationTitle]);
+          const existing = isPostgres ? (checkRes.rows || checkRes) : checkRes;
+          if (existing && existing.length > 0) {
+            console.log(`[Deduplicação] Lembrete de backup mensal já enviado hoje para utilizador ${user.id}. A ignorar envio duplicado.`);
+            backupAlreadySent = true;
+          }
         }
 
-        results.push({
-          userId: user.id,
-          email: user.email,
-          type: 'backup_reminder',
-          currentDay,
-          pushSent
-        });
+        if (!backupAlreadySent) {
+          const pushSent = await sendPush(notificationTitle, notificationBody, `monthly-backup-${currentDay}`);
+
+          // Registar na central interna de notificações
+          try {
+            const notifSql = isPostgres
+              ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
+              : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
+            await query(notifSql, [user.id, notificationTitle, notificationBody, 'backup']);
+          } catch (errNotif) {
+            console.error('Erro ao registar notificação interna:', errNotif);
+          }
+
+          results.push({
+            userId: user.id,
+            email: user.email,
+            type: 'backup_reminder',
+            currentDay,
+            pushSent
+          });
+        }
       }
     }
 
@@ -361,7 +448,7 @@ async function processDebitReminders(options = {}) {
             const checkRes = await query(checkNotifSql, [user.id, `%${saving.name}%`]);
             const existingNotifs = isPostgres ? (checkRes.rows || checkRes) : checkRes;
 
-            if (!existingNotifs || existingNotifs.length === 0) {
+            if (!existingNotifs || existingNotifs.length === 0 || options.force) {
               const [tYear, tMonth, tDay] = saving.target_date.split('-');
               const formattedDate = `${tDay}/${tMonth}/${tYear}`;
               const valCurStr = (saving.current_amount_cents / 100).toFixed(2).replace('.', ',') + ' €';
@@ -424,57 +511,78 @@ async function processDebitReminders(options = {}) {
       const isMonthly = (currentDate === targetBackupDay);
 
       if (isWeekly || isMonthly) {
-        try {
-          // Gerar os dados do backup
-          const expensesSql = isPostgres
-            ? `SELECT * FROM expenses WHERE user_id = $1 ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY id`
-            : `SELECT * FROM expenses WHERE user_id = ? ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY id`;
-          const expensesResult = await query(expensesSql, [user.id]);
-          const userExpenses = isPostgres ? expensesResult.rows : expensesResult;
-
-          const settingsSql = isPostgres
-            ? 'SELECT * FROM settings WHERE user_id = $1'
-            : 'SELECT * FROM settings WHERE user_id = ?';
-          const userSettings = await queryOne(settingsSql, [user.id]);
-
-          const backupData = JSON.stringify({
-            format_version: 1,
-            exported_at: lisbonDate.toISOString(),
-            user_id: user.id,
-            expenses: userExpenses,
-            settings: userSettings
-          }, null, 2);
-
-          const dateStr = lisbonDate.toISOString().split('T')[0];
-          
-          if (isWeekly) {
-            const fileName = `backup_semanal_${dateStr}.json`;
-            await uploadBackup(user.google_refresh_token, backupData, fileName, isWeekly ? 'semanal' : 'mensal');
-            await rotateBackups(user.google_refresh_token, 'semanal', 2); // Manter os últimos 2
+        let driveAlreadyToday = false;
+        if (!options.force) {
+          const checkDriveSql = isPostgres 
+            ? `SELECT id FROM notifications 
+               WHERE user_id = $1 
+                 AND type = 'success' 
+                 AND title = 'Backup Google Drive' 
+                 AND created_at >= CURRENT_DATE`
+            : `SELECT id FROM notifications 
+               WHERE user_id = ? 
+                 AND type = 'success' 
+                 AND title = 'Backup Google Drive' 
+                 AND date(created_at) = date('now')`;
+          const checkRes = await query(checkDriveSql, [user.id]);
+          const existing = isPostgres ? (checkRes.rows || checkRes) : checkRes;
+          if (existing && existing.length > 0) {
+            console.log(`[Deduplicação] Backup Google Drive já realizado hoje para utilizador ${user.id}. A ignorar.`);
+            driveAlreadyToday = true;
           }
+        }
 
-          if (isMonthly) {
-            const fileName = `backup_mensal_${dateStr}.json`;
-            await uploadBackup(user.google_refresh_token, backupData, fileName, isWeekly ? 'semanal' : 'mensal');
+        if (!driveAlreadyToday) {
+          try {
+            // Gerar os dados do backup
+            const expensesSql = isPostgres
+              ? `SELECT * FROM expenses WHERE user_id = $1 ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY id`
+              : `SELECT * FROM expenses WHERE user_id = ? ${isPrivateAdmin ? '' : 'AND (is_private = 0 OR is_private IS NULL)'} ORDER BY id`;
+            const expensesResult = await query(expensesSql, [user.id]);
+            const userExpenses = isPostgres ? expensesResult.rows : expensesResult;
+
+            const settingsSql = isPostgres
+              ? 'SELECT * FROM settings WHERE user_id = $1'
+              : 'SELECT * FROM settings WHERE user_id = ?';
+            const userSettings = await queryOne(settingsSql, [user.id]);
+
+            const backupData = JSON.stringify({
+              format_version: 1,
+              exported_at: lisbonDate.toISOString(),
+              user_id: user.id,
+              expenses: userExpenses,
+              settings: userSettings
+            }, null, 2);
+
+            const dateStr = lisbonDate.toISOString().split('T')[0];
+            
+            if (isWeekly) {
+              const fileName = `backup_semanal_${dateStr}.json`;
+              await uploadBackup(user.google_refresh_token, backupData, fileName, isWeekly ? 'semanal' : 'mensal');
+              await rotateBackups(user.google_refresh_token, 'semanal', 2); // Manter os últimos 2
+            }
+
+            if (isMonthly) {
+              const fileName = `backup_mensal_${dateStr}.json`;
+              await uploadBackup(user.google_refresh_token, backupData, fileName, isWeekly ? 'semanal' : 'mensal');
+            }
+
+            const msg = 'Backup automático ' + (isWeekly ? 'semanal' : 'mensal') + ' gravado com sucesso!';
+            const sql = isPostgres 
+              ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
+              : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
+            await query(sql, [user.id, 'Backup Google Drive', msg, 'success']);
+            
+            results.push({
+              userId: user.id,
+              email: user.email,
+              type: 'google_drive_backup',
+              weekly: isWeekly,
+              monthly: isMonthly
+            });
+          } catch (err) {
+            console.error('Erro ao fazer backup para o Google Drive', err);
           }
-
-          const isPostgres = require('../models/database').isPostgres;
-          const query = require('../models/database').query;
-          const msg = 'Backup automático ' + (isWeekly ? 'semanal' : 'mensal') + ' gravado com sucesso!';
-          const sql = isPostgres 
-            ? 'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)'
-            : 'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)';
-          await query(sql, [user.id, 'Backup Google Drive', msg, 'success']);
-          
-          results.push({
-            userId: user.id,
-            email: user.email,
-            type: 'google_drive_backup',
-            weekly: isWeekly,
-            monthly: isMonthly
-          });
-        } catch (err) {
-          console.error('Erro ao fazer backup para o Google Drive', err);
         }
       }
     }
@@ -486,9 +594,10 @@ async function processDebitReminders(options = {}) {
 
 router.all('/check', verifyCronAuth, async (req, res) => {
   try {
-    const rawForce = req.query?.forceDay || req.query?.forceday || req.query?.force_day || (req.body && req.body.forceDay);
-    const forceDay = rawForce !== undefined ? parseInt(rawForce, 10) : undefined;
-    const details = await processDebitReminders({ forceDay });
+    const rawForceDay = req.query?.forceDay || req.query?.forceday || req.query?.force_day || (req.body && req.body.forceDay);
+    const forceDay = rawForceDay !== undefined ? parseInt(rawForceDay, 10) : undefined;
+    const force = req.query?.force === 'true' || req.query?.force === true || (req.body && (req.body.force === true || req.body.force === 'true'));
+    const details = await processDebitReminders({ forceDay, force });
     res.json({
       success: true,
       timestamp: new Date().toISOString(),
